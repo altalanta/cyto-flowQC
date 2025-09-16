@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Freezer Inventory</title>
+  <meta name="theme-color" content="#0d9488" />
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/dexie@3.2.7/dist/dexie.min.js"></script>
+  <script defer src="db.js"></script>
+  <script defer src="app.js"></script>
+  <meta name="description" content="Local-first PWA for tracking a home freezer inventory. Offline-ready.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Freezer">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Freezer Inventory</h1>
+    <div class="filters" role="search">
+      <label for="search" class="visually-hidden">Search</label>
+      <input id="search" name="search" type="search" placeholder="Search foods..." autocomplete="off">
+
+      <label for="locationFilter" class="visually-hidden">Filter by location</label>
+      <select id="locationFilter" name="locationFilter" aria-label="Filter by location">
+        <option value="">All locations</option>
+      </select>
+
+      <label class="checkbox">
+        <input id="openedOnly" type="checkbox" />
+        <span>Opened only</span>
+      </label>
+
+      <label for="expFilter" class="visually-hidden">Expiring in days</label>
+      <select id="expFilter" name="expFilter" aria-label="Expiring in">
+        <option value="">Any date</option>
+        <option value="7">≤ 7 days</option>
+        <option value="30">≤ 30 days</option>
+      </select>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section id="emptyState" class="empty" hidden>
+      <div class="empty-art" aria-hidden="true">🥶</div>
+      <h2>No items yet</h2>
+      <p>Add something, or load sample data to explore.</p>
+      <button id="loadSamples" class="btn">Load sample data</button>
+    </section>
+
+    <section id="list" aria-live="polite"></section>
+
+    <section id="addSection" class="add-section">
+      <h2 id="addHeading">Add Item</h2>
+      <form id="addForm" aria-labelledby="addHeading">
+        <div class="field">
+          <label for="foodInput">Food</label>
+          <input id="foodInput" name="food" type="text" required autocomplete="off" placeholder="e.g., Chicken thighs">
+          <div id="foodTypeahead" class="typeahead" role="listbox" aria-label="Food suggestions"></div>
+          <small class="hint">Type to search; create new if not found.</small>
+        </div>
+
+        <div class="field field-row">
+          <div class="field">
+            <label for="qtyValue">Quantity</label>
+            <input id="qtyValue" name="qtyValue" type="number" step="any" min="0" required placeholder="e.g., 2">
+          </div>
+          <div class="field">
+            <label for="qtyUnit">Unit</label>
+            <select id="qtyUnit" name="qtyUnit" required>
+              <option value="g">g</option>
+              <option value="kg">kg</option>
+              <option value="ml">ml</option>
+              <option value="L">L</option>
+              <option value="count">count</option>
+              <option value="serving">serving</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="location">Location</label>
+          <input id="location" name="location" type="text" placeholder="e.g., Bin A" required>
+        </div>
+
+        <div class="field field-row">
+          <div class="field">
+            <label for="bestBy">Best-by (optional)</label>
+            <input id="bestBy" name="bestBy" type="date">
+          </div>
+          <div class="field checkbox">
+            <input id="opened" name="opened" type="checkbox">
+            <label for="opened">Opened</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="notes">Notes (optional)</label>
+          <textarea id="notes" name="notes" rows="2" placeholder="Any notes..."></textarea>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn primary">Add</button>
+          <button type="reset" class="btn">Clear</button>
+        </div>
+        <div id="addValidation" class="validation" aria-live="polite"></div>
+      </form>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div class="export-import">
+      <button id="exportBtn" class="btn">Export JSON</button>
+      <label for="importFile" class="btn">Import JSON</label>
+      <input id="importFile" type="file" accept="application/json" hidden>
+    </div>
+    <button id="scrollToAdd" class="fab" aria-label="Add item">＋</button>
+  </footer>
+
+  <div id="toast" class="toast" aria-live="assertive" aria-atomic="true"></div>
+</body>
+</html>
