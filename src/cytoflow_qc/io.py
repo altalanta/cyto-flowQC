@@ -101,9 +101,7 @@ def standardize_channels(
     """
 
     rename_pairs = {
-        raw_name: canonical
-        for canonical, raw_name in channel_map.items()
-        if raw_name in df.columns
+        raw_name: canonical for canonical, raw_name in channel_map.items() if raw_name in df.columns
     }
     if not rename_pairs:
         return df

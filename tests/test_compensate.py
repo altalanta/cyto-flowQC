@@ -18,10 +18,12 @@ def test_get_spillover_prefers_metadata() -> None:
 
 
 def test_apply_compensation_removes_crosstalk() -> None:
-    df = pd.DataFrame({
-        "CD3-A": [100.0, 120.0, 80.0],
-        "CD19-A": [50.0, 40.0, 45.0],
-    })
+    df = pd.DataFrame(
+        {
+            "CD3-A": [100.0, 120.0, 80.0],
+            "CD19-A": [50.0, 40.0, 45.0],
+        }
+    )
     spill = np.array([[1.0, 0.2], [0.1, 1.0]])
     channels = ["CD3-A", "CD19-A"]
     compensated = apply_compensation(df, spill, channels)

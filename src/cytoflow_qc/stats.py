@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -45,7 +44,9 @@ def effect_sizes(
             hedges = _hedges_g(ctrl_series.to_numpy(), trt_series.to_numpy())
             cliff = _cliffs_delta(ctrl_series.to_numpy(), trt_series.to_numpy())
             try:
-                u_stat, p_value = stats.mannwhitneyu(trt_series, ctrl_series, alternative="two-sided")
+                u_stat, p_value = stats.mannwhitneyu(
+                    trt_series, ctrl_series, alternative="two-sided"
+                )
             except ValueError:
                 u_stat, p_value = np.nan, np.nan
 
@@ -70,13 +71,15 @@ def effect_sizes(
     if results_df.empty:
         return results_df
     results_df["adj_p_value"] = _holm_correction(results_df["p_value"].to_numpy())
-    results_df["significant"] = results_df["adj_p_value"] < 0.05
+    SIGNIFICANCE_THRESHOLD = 0.05
+    results_df["significant"] = results_df["adj_p_value"] < SIGNIFICANCE_THRESHOLD
     return results_df
 
 
 def _hedges_g(control: np.ndarray, treatment: np.ndarray) -> float:
     n1, n2 = len(control), len(treatment)
-    if n1 < 2 or n2 < 2:
+    MIN_SAMPLE_SIZE = 2
+    if n1 < MIN_SAMPLE_SIZE or n2 < MIN_SAMPLE_SIZE:
         return float("nan")
     mean_diff = treatment.mean() - control.mean()
     pooled_var = ((n1 - 1) * control.var(ddof=1) + (n2 - 1) * treatment.var(ddof=1)) / (n1 + n2 - 2)
