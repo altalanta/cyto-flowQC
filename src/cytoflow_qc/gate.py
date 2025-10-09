@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -74,7 +73,9 @@ def auto_gate(
     return working, gate_log
 
 
-def _debris_gate(df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]) -> GateResult:
+def _debris_gate(
+    df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]
+) -> GateResult:
     fsc = channels.get("fsc_a")
     ssc = channels.get("ssc_a")
     if fsc not in df or ssc not in df:
@@ -86,7 +87,9 @@ def _debris_gate(df: pd.DataFrame, channels: dict[str, str | None], config: dict
     return GateResult(mask, {"fsc_cut": float(fsc_cut), "ssc_cut": float(ssc_cut)})
 
 
-def _singlet_gate(df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]) -> GateResult:
+def _singlet_gate(
+    df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]
+) -> GateResult:
     fsc_a = channels.get("fsc_a")
     fsc_h = channels.get("fsc_h")
     if fsc_a not in df or fsc_h not in df:
@@ -97,7 +100,9 @@ def _singlet_gate(df: pd.DataFrame, channels: dict[str, str | None], config: dic
     return GateResult(mask, {"tolerance": float(tol)})
 
 
-def _lymph_gate(df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]) -> GateResult:
+def _lymph_gate(
+    df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]
+) -> GateResult:
     fsc = channels.get("fsc_a")
     ssc = channels.get("ssc_a")
     if fsc not in df or ssc not in df:
@@ -128,7 +133,9 @@ def _lymph_gate(df: pd.DataFrame, channels: dict[str, str | None], config: dict[
     )
 
 
-def _viability_gate(df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]) -> GateResult:
+def _viability_gate(
+    df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]
+) -> GateResult:
     channel = channels.get("viability")
     if channel not in df:
         return GateResult(pd.Series(True, index=df.index), {"applied": 0.0})

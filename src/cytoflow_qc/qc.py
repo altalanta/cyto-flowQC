@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from collections.abc import Iterable
 
 import numpy as np
@@ -16,7 +14,9 @@ DEFAULT_QC_CONFIG: dict[str, dict[str, float]] = {
 }
 
 
-def add_qc_flags(df: pd.DataFrame, config: dict[str, dict[str, float]] | None = None) -> pd.DataFrame:
+def add_qc_flags(
+    df: pd.DataFrame, config: dict[str, dict[str, float]] | None = None
+) -> pd.DataFrame:
     """Annotate the provided events table with QC flag columns.
 
     Columns added:
@@ -89,7 +89,9 @@ def _flag_saturation(df: pd.DataFrame, config: dict[str, float]) -> pd.Series:
     fluor_channels = [
         col
         for col in df.columns
-        if not col.lower().startswith("fsc") and not col.lower().startswith("ssc") and not col.startswith("qc_")
+        if not col.lower().startswith("fsc")
+        and not col.lower().startswith("ssc")
+        and not col.startswith("qc_")
     ]
     if not fluor_channels:
         return pd.Series(False, index=df.index)

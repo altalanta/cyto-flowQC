@@ -26,7 +26,9 @@ def test_extract_features_and_compute_drift(samplesheet_path) -> None:
         qc_df = add_qc_flags(events)
         gated, _ = auto_gate(qc_df, config=GATE_CONFIG)
         sample_tables[row["sample_id"]] = gated
-        metadata_rows.append({"sample_id": row["sample_id"], "batch": row["batch"], "condition": row["condition"]})
+        metadata_rows.append(
+            {"sample_id": row["sample_id"], "batch": row["batch"], "condition": row["condition"]}
+        )
 
     metadata = pd.DataFrame(metadata_rows)
     features = extract_sample_features(sample_tables, metadata)

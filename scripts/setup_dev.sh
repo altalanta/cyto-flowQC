@@ -32,3 +32,4 @@ echo "You can now run:"
 echo "  make test    - Run tests"
 echo "  make lint    - Check code style"
 echo "  make format  - Format code"
+

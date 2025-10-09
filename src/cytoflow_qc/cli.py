@@ -39,7 +39,10 @@ app = typer.Typer(add_completion=False, help="Flow cytometry QC and gating pipel
 
 
 @app.callback()
-def _version(ctx: typer.Context, version: bool = typer.Option(False, "--version", help="Show version and exit")) -> None:
+def _version(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", help="Show version and exit"),
+) -> None:
     if version:
         typer.echo(__version__)
         raise typer.Exit()
@@ -151,7 +154,11 @@ def run(
     stage_stats(gate_dir, stats_dir, "condition", markers)
 
     report_path = root / "report.html"
-    build_report(str(root), str(cfg.get("report_template", Path("configs/report_template.html.j2"))), str(report_path))
+    build_report(
+        str(root),
+        str(cfg.get("report_template", Path("configs/report_template.html.j2"))),
+        str(report_path),
+    )
     typer.echo(f"Report available at {report_path}")
 
 
@@ -275,11 +282,13 @@ def stage_gate(indir: Path, out_dir: Path, strategy: str, config: dict[str, Any]
         _write_json(params_dir / f"{sample_id}.json", params)
         record["events_file"] = f"events/{sample_id}.parquet"
         record["params_file"] = f"params/{sample_id}.json"
-        summary_rows.append({
-            "sample_id": sample_id,
-            "input_events": len(df),
-            "gated_events": len(gated),
-        })
+        summary_rows.append(
+            {
+                "sample_id": sample_id,
+                "input_events": len(df),
+                "gated_events": len(gated),
+            }
+        )
 
         plot_gating_scatter(
             df,
@@ -302,12 +311,16 @@ def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: dict[str, An
     ensure_dir(out_dir)
     figures_dir = ensure_dir(out_dir / "figures")
     manifest = read_manifest(indir / "manifest.csv")
-    sample_events = {sid: load_dataframe(indir / path) for sid, path in list_stage_events(indir).items()}
+    sample_events = {
+        sid: load_dataframe(indir / path) for sid, path in list_stage_events(indir).items()
+    }
     meta_cols = ["sample_id", batch_col]
     if "condition" in manifest.columns:
         meta_cols.append("condition")
     metadata = manifest[meta_cols].drop_duplicates()
-    marker_channels = config.get("channels", {}).get("markers") if isinstance(config, dict) else None
+    marker_channels = (
+        config.get("channels", {}).get("markers") if isinstance(config, dict) else None
+    )
     if isinstance(marker_channels, list):
         markers = marker_channels
     else:
@@ -359,7 +372,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
         with path.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, default=str)
     except OSError as e:
-        raise RuntimeError(f"Cannot write to {path}: {e}")
+        raise RuntimeError(f"Cannot write to {path}: {e}") from e
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -367,9 +380,9 @@ def _read_json(path: Path) -> dict[str, Any]:
         with path.open("r", encoding="utf-8") as handle:
             return json.load(handle)
     except OSError as e:
-        raise RuntimeError(f"Cannot read from {path}: {e}")
+        raise RuntimeError(f"Cannot read from {path}: {e}") from e
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in {path}: {e}")
+        raise ValueError(f"Invalid JSON in {path}: {e}") from e
 
 
 def _resolve_marker_columns(values: str | None, cfg: dict[str, Any]) -> Any:
