@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -12,10 +11,10 @@ import pandas as pd
 @dataclass
 class GateResult:
     mask: pd.Series
-    params: Dict[str, float]
+    params: dict[str, float]
 
 
-DEFAULT_GATE_CONFIG: Dict[str, Dict[str, float]] = {
+DEFAULT_GATE_CONFIG: dict[str, dict[str, float]] = {
     "debris": {"min_percentile": 5.0},
     "singlets": {"tolerance": 0.07},
     "lymphocytes": {"low_percentile": 10.0, "high_percentile": 80.0},
@@ -26,8 +25,8 @@ DEFAULT_GATE_CONFIG: Dict[str, Dict[str, float]] = {
 def auto_gate(
     df: pd.DataFrame,
     strategy: str = "default",
-    config: Optional[Dict[str, Dict[str, float]]] = None,
-) -> Tuple[pd.DataFrame, Dict[str, Dict[str, float]]]:
+    config: dict[str, dict[str, float]] | None = None,
+) -> tuple[pd.DataFrame, dict[str, dict[str, float]]]:
     """Apply the selected gating strategy and return gated data + parameters."""
 
     if strategy != "default":
@@ -43,7 +42,7 @@ def auto_gate(
     }
 
     working = df.copy()
-    gate_log: Dict[str, Dict[str, float]] = {}
+    gate_log: dict[str, dict[str, float]] = {}
 
     # Debris gate (use QC flags if present)
     if "qc_debris" in working:
@@ -74,7 +73,9 @@ def auto_gate(
     return working, gate_log
 
 
-def _debris_gate(df: pd.DataFrame, channels: Dict[str, Optional[str]], config: Dict[str, float]) -> GateResult:
+def _debris_gate(
+    df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]
+) -> GateResult:
     fsc = channels.get("fsc_a")
     ssc = channels.get("ssc_a")
     if fsc not in df or ssc not in df:
@@ -86,7 +87,9 @@ def _debris_gate(df: pd.DataFrame, channels: Dict[str, Optional[str]], config: D
     return GateResult(mask, {"fsc_cut": float(fsc_cut), "ssc_cut": float(ssc_cut)})
 
 
-def _singlet_gate(df: pd.DataFrame, channels: Dict[str, Optional[str]], config: Dict[str, float]) -> GateResult:
+def _singlet_gate(
+    df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]
+) -> GateResult:
     fsc_a = channels.get("fsc_a")
     fsc_h = channels.get("fsc_h")
     if fsc_a not in df or fsc_h not in df:
@@ -97,15 +100,22 @@ def _singlet_gate(df: pd.DataFrame, channels: Dict[str, Optional[str]], config: 
     return GateResult(mask, {"tolerance": float(tol)})
 
 
-def _lymph_gate(df: pd.DataFrame, channels: Dict[str, Optional[str]], config: Dict[str, float]) -> GateResult:
+def _lymph_gate(
+    df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]
+) -> GateResult:
     fsc = channels.get("fsc_a")
     ssc = channels.get("ssc_a")
     if fsc not in df or ssc not in df:
         return GateResult(pd.Series(True, index=df.index), {"applied": 0.0})
+
     lo = config.get("low_percentile", 10.0)
     hi = config.get("high_percentile", 80.0)
-    fsc_bounds = np.percentile(df[fsc], [lo, hi])
-    ssc_bounds = np.percentile(df[ssc], [lo, hi])
+
+    # Compute percentiles more efficiently
+    percentiles = [lo, hi]
+    fsc_bounds = np.percentile(df[fsc], percentiles)
+    ssc_bounds = np.percentile(df[ssc], percentiles)
+
     mask = (
         (df[fsc] >= fsc_bounds[0])
         & (df[fsc] <= fsc_bounds[1])
@@ -123,7 +133,9 @@ def _lymph_gate(df: pd.DataFrame, channels: Dict[str, Optional[str]], config: Di
     )
 
 
-def _viability_gate(df: pd.DataFrame, channels: Dict[str, Optional[str]], config: Dict[str, float]) -> GateResult:
+def _viability_gate(
+    df: pd.DataFrame, channels: dict[str, str | None], config: dict[str, float]
+) -> GateResult:
     channel = channels.get("viability")
     if channel not in df:
         return GateResult(pd.Series(True, index=df.index), {"applied": 0.0})
