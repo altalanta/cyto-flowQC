@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, Optional
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
 
-DEFAULT_QC_CONFIG: Dict[str, Dict[str, float]] = {
+DEFAULT_QC_CONFIG: dict[str, dict[str, float]] = {
     "debris": {"fsc_percentile": 2.0, "ssc_percentile": 2.0},
     "doublets": {"tolerance": 0.08},
     "saturation": {"threshold": 0.995},
 }
 
 
-def add_qc_flags(df: pd.DataFrame, config: Optional[Dict[str, Dict[str, float]]] = None) -> pd.DataFrame:
+def add_qc_flags(
+    df: pd.DataFrame, config: dict[str, dict[str, float]] | None = None
+) -> pd.DataFrame:
     """Annotate the provided events table with QC flag columns.
 
     Columns added:
@@ -36,7 +38,7 @@ def add_qc_flags(df: pd.DataFrame, config: Optional[Dict[str, Dict[str, float]]]
     return result
 
 
-def qc_summary(samples: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+def qc_summary(samples: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """Summarise QC metrics for a dict of ``sample_id -> DataFrame``."""
 
     records = []
@@ -58,7 +60,8 @@ def qc_summary(samples: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def _flag_debris(df: pd.DataFrame, config: Dict[str, float]) -> pd.Series:
+def _flag_debris(df: pd.DataFrame, config: dict[str, float]) -> pd.Series:
+    """Flag events with low forward/side scatter (debris)."""
     fsc = _find_channel(df, ("FSC-A", "FSC_A", "fsc_a", "fsc-a"))
     ssc = _find_channel(df, ("SSC-A", "SSC_A", "ssc_a", "ssc-a"))
     if fsc is None or ssc is None:
@@ -68,7 +71,8 @@ def _flag_debris(df: pd.DataFrame, config: Dict[str, float]) -> pd.Series:
     return (df[fsc] <= fsc_cut) | (df[ssc] <= ssc_cut)
 
 
-def _flag_doublets(df: pd.DataFrame, config: Dict[str, float]) -> pd.Series:
+def _flag_doublets(df: pd.DataFrame, config: dict[str, float]) -> pd.Series:
+    """Flag doublets based on FSC-H vs FSC-A deviation."""
     fsc_a = _find_channel(df, ("FSC-A", "FSC_A", "fsc_a", "fsc-a"))
     fsc_h = _find_channel(df, ("FSC-H", "FSC_H", "fsc_h", "fsc-h"))
     if fsc_a is None or fsc_h is None:
@@ -79,12 +83,15 @@ def _flag_doublets(df: pd.DataFrame, config: Dict[str, float]) -> pd.Series:
     return ratio.sub(1.0).abs() > tol
 
 
-def _flag_saturation(df: pd.DataFrame, config: Dict[str, float]) -> pd.Series:
+def _flag_saturation(df: pd.DataFrame, config: dict[str, float]) -> pd.Series:
+    """Flag saturated fluorescence events."""
     threshold = config.get("threshold", 0.995)
     fluor_channels = [
         col
         for col in df.columns
-        if not col.lower().startswith("fsc") and not col.lower().startswith("ssc") and not col.startswith("qc_")
+        if not col.lower().startswith("fsc")
+        and not col.lower().startswith("ssc")
+        and not col.startswith("qc_")
     ]
     if not fluor_channels:
         return pd.Series(False, index=df.index)
@@ -97,15 +104,18 @@ def _flag_saturation(df: pd.DataFrame, config: Dict[str, float]) -> pd.Series:
     return saturated
 
 
-def _channel_metrics(df: pd.DataFrame, exclude_flags: bool = False) -> Dict[str, float]:
+def _channel_metrics(df: pd.DataFrame, exclude_flags: bool = False) -> dict[str, float]:
+    """Compute median signal and mean IQR across numeric channels."""
     numeric_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
     if exclude_flags:
         numeric_cols = [col for col in numeric_cols if not col.startswith("qc_")]
     if not numeric_cols:
         return {}
 
-    medians = df[numeric_cols].median()
-    iqr = df[numeric_cols].quantile(0.75) - df[numeric_cols].quantile(0.25)
+    # Use more efficient operations
+    subset = df[numeric_cols]
+    medians = subset.median()
+    iqr = subset.quantile(0.75) - subset.quantile(0.25)
     mean_iqr = float(iqr.mean()) if not iqr.empty else float("nan")
     return {
         "median_signal": float(medians.mean()),
@@ -113,7 +123,8 @@ def _channel_metrics(df: pd.DataFrame, exclude_flags: bool = False) -> Dict[str,
     }
 
 
-def _find_channel(df: pd.DataFrame, candidates: Iterable[str]) -> Optional[str]:
+def _find_channel(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
+    """Find first matching channel name from candidates, case-insensitive."""
     for name in candidates:
         if name in df.columns:
             return name

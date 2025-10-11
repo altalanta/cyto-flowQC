@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -66,7 +66,7 @@ def plot_batch_drift_pca(pca_df: pd.DataFrame, output_path: str, batch_col: str)
     plt.close(fig)
 
 
-def plot_batch_drift_umap(umap_df: Optional[pd.DataFrame], output_path: str, batch_col: str) -> None:
+def plot_batch_drift_umap(umap_df: pd.DataFrame | None, output_path: str, batch_col: str) -> None:
     """Scatter plot of UMAP embedding if available."""
 
     if umap_df is None or umap_df.empty:

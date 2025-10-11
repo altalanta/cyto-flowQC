@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -17,15 +17,15 @@ except ImportError:  # pragma: no cover
 
 
 def extract_sample_features(
-    samples: Dict[str, pd.DataFrame],
+    samples: dict[str, pd.DataFrame],
     metadata: pd.DataFrame,
-    marker_channels: Optional[list[str]] = None,
+    marker_channels: list[str] | None = None,
 ) -> pd.DataFrame:
     """Convert per-sample events into a feature matrix for drift analysis."""
 
     records = []
     for sample_id, frame in samples.items():
-        record: Dict[str, float] = {
+        record: dict[str, float] = {
             "sample_id": sample_id,
             "n_events": float(len(frame)),
             "qc_pass_fraction": float(frame.get("qc_pass", pd.Series(True)).mean()),
@@ -45,7 +45,7 @@ def extract_sample_features(
     return merged
 
 
-def compute_batch_drift(features_df: pd.DataFrame, by: str = "batch") -> Dict[str, object]:
+def compute_batch_drift(features_df: pd.DataFrame, by: str = "batch") -> dict[str, Any]:
     """Run simple statistical tests and embeddings to flag drift across batches."""
 
     if by not in features_df.columns:
@@ -64,13 +64,16 @@ def compute_batch_drift(features_df: pd.DataFrame, by: str = "batch") -> Dict[st
     for col in feature_cols:
         groups = [features_df.loc[features_df[by] == batch, col].dropna() for batch in batches]
         groups = [g for g in groups if len(g) > 0]
-        if len(groups) < 2:
+        MIN_GROUPS_FOR_TEST = 2
+        if len(groups) < MIN_GROUPS_FOR_TEST:
             continue
         try:
             stat, p_value = stats.kruskal(*groups)
         except ValueError:
             continue
-        test_rows.append({"feature": col, "test": "kruskal", "statistic": float(stat), "p_value": float(p_value)})
+        test_rows.append(
+            {"feature": col, "test": "kruskal", "statistic": float(stat), "p_value": float(p_value)}
+        )
 
     tests = pd.DataFrame(test_rows)
     if not tests.empty:
@@ -79,7 +82,9 @@ def compute_batch_drift(features_df: pd.DataFrame, by: str = "batch") -> Dict[st
         tests["adj_p_value"] = []
 
     scaler = StandardScaler()
-    scaled = scaler.fit_transform(features_df[feature_cols].fillna(features_df[feature_cols].median()))
+    scaled = scaler.fit_transform(
+        features_df[feature_cols].fillna(features_df[feature_cols].median())
+    )
     pca = PCA(n_components=min(3, scaled.shape[1]))
     pca_coords = pca.fit_transform(scaled)
     pca_df = pd.DataFrame(pca_coords, columns=[f"PC{i+1}" for i in range(pca_coords.shape[1])])
@@ -87,14 +92,18 @@ def compute_batch_drift(features_df: pd.DataFrame, by: str = "batch") -> Dict[st
     pca_df[by] = features_df[by].values
 
     umap_df = None
-    if umap is not None and scaled.shape[0] > 2:  # pragma: no cover - optional path
+    MIN_SAMPLES_FOR_UMAP = 2
+    if umap is not None and scaled.shape[0] > MIN_SAMPLES_FOR_UMAP:  # pragma: no cover - optional path
         reducer = umap.UMAP(random_state=42)
         coords = reducer.fit_transform(scaled)
         umap_df = pd.DataFrame(coords, columns=["UMAP1", "UMAP2"])
         umap_df["sample_id"] = features_df["sample_id"].values
         umap_df[by] = features_df[by].values
 
-    significant = tests.loc[tests["adj_p_value"] < 0.05, "feature"].tolist() if not tests.empty else []
+    SIGNIFICANCE_THRESHOLD = 0.05
+    significant = (
+        tests.loc[tests["adj_p_value"] < SIGNIFICANCE_THRESHOLD, "feature"].tolist() if not tests.empty else []
+    )
     return {
         "tests": tests,
         "pca": pca_df,

@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 
 def get_spillover(
-    metadata: Dict[str, object],
-    override: Optional[str] = None,
-) -> Tuple[Optional[np.ndarray], Optional[list[str]]]:
+    metadata: dict[str, Any],
+    override: str | None = None,
+) -> tuple[np.ndarray | None, list[str] | None]:
     """Return a spillover matrix and channel order if one is available.
 
     Priority order:
@@ -43,7 +43,7 @@ def get_spillover(
 def apply_compensation(
     df: pd.DataFrame,
     spill_matrix: np.ndarray,
-    spill_channels: Iterable[str],
+    spill_channels: Any,
 ) -> pd.DataFrame:
     """Apply spillover compensation to fluorescence channels.
 
@@ -61,7 +61,8 @@ def apply_compensation(
         raise ValueError("Channel list length does not match matrix dimensions")
 
     present = [ch for ch in channels if ch in df.columns]
-    if len(present) < 2:
+    MIN_CHANNELS_FOR_COMPENSATION = 2
+    if len(present) < MIN_CHANNELS_FOR_COMPENSATION:
         return df.copy()
 
     sub_idx = [channels.index(ch) for ch in present]
@@ -78,7 +79,7 @@ def apply_compensation(
     return compensated
 
 
-def _load_spillover_from_csv(path: Path) -> Tuple[Optional[np.ndarray], Optional[list[str]]]:
+def _load_spillover_from_csv(path: Path) -> tuple[np.ndarray | None, list[str] | None]:
     """Load a square spillover matrix from a CSV file."""
 
     if not path.exists():
@@ -92,7 +93,7 @@ def _load_spillover_from_csv(path: Path) -> Tuple[Optional[np.ndarray], Optional
     return df.to_numpy(dtype=float), df.index.tolist()
 
 
-def _parse_spillover_string(raw: object) -> Optional[Tuple[np.ndarray, list[str]]]:
+def _parse_spillover_string(raw: object) -> tuple[np.ndarray, list[str]] | None:
     """Parse the `$SPILLOVER` keyword string into an array and channel list."""
 
     if not isinstance(raw, str):

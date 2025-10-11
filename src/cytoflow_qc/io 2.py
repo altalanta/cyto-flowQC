@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -69,7 +69,7 @@ def read_fcs(file_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         raise FileNotFoundError(f"File does not exist: {file_path}")
 
     suffix = path.suffix.lower()
-    metadata: Dict[str, Any] = {
+    metadata: dict[str, Any] = {
         "source_path": str(path),
     }
 
@@ -89,8 +89,8 @@ def read_fcs(file_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
 
 def standardize_channels(
     df: pd.DataFrame,
-    metadata: Dict[str, Any],
-    channel_map: Dict[str, str],
+    metadata: dict[str, Any],
+    channel_map: dict[str, str],
 ) -> pd.DataFrame:
     """Rename channels according to a configuration map.
 
@@ -101,9 +101,7 @@ def standardize_channels(
     """
 
     rename_pairs = {
-        raw_name: canonical
-        for canonical, raw_name in channel_map.items()
-        if raw_name in df.columns
+        raw_name: canonical for canonical, raw_name in channel_map.items() if raw_name in df.columns
     }
     if not rename_pairs:
         return df
@@ -113,7 +111,7 @@ def standardize_channels(
     return renamed
 
 
-def _read_fcs_binary(path: Path, metadata: Dict[str, Any]) -> pd.DataFrame:
+def _read_fcs_binary(path: Path, metadata: dict[str, Any]) -> pd.DataFrame:
     """Internal helper that loads a binary FCS file via flowkit/fcsparser."""
 
     if fk is not None:  # pragma: no branch

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Any
 
 import pandas as pd
 import typer
@@ -39,7 +39,10 @@ app = typer.Typer(add_completion=False, help="Flow cytometry QC and gating pipel
 
 
 @app.callback()
-def _version(ctx: typer.Context, version: bool = typer.Option(False, "--version", help="Show version and exit")) -> None:
+def _version(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", help="Show version and exit"),
+) -> None:
     if version:
         typer.echo(__version__)
         raise typer.Exit()
@@ -49,7 +52,7 @@ def _version(ctx: typer.Context, version: bool = typer.Option(False, "--version"
 def ingest(
     samplesheet: Path = typer.Argument(..., exists=True, readable=True),
     out: Path = typer.Argument(...),
-    config: Optional[Path] = typer.Option(None, "--config", "-c", help="Optional YAML config"),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Optional YAML config"),
 ) -> None:
     cfg = load_config(config) if config else {}
     stage_ingest(samplesheet, out, cfg)
@@ -60,7 +63,7 @@ def ingest(
 def compensate(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
-    spill: Optional[Path] = typer.Option(None, "--spill", help="Override spillover CSV"),
+    spill: Path | None = typer.Option(None, "--spill", help="Override spillover CSV"),
 ) -> None:
     stage_compensate(indir, out, spill)
     typer.echo(f"Compensated events -> {out}")
@@ -70,7 +73,7 @@ def compensate(
 def qc(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
-    config: Optional[Path] = typer.Option(None, "--config", "-c"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
     cfg = load_config(config) if config else {}
     stage_qc(indir, out, cfg.get("qc", {}))
@@ -82,7 +85,7 @@ def gate(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
     strategy: str = typer.Option("default", "--strategy"),
-    config: Optional[Path] = typer.Option(None, "--config", "-c"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
     cfg = load_config(config) if config else {}
     stage_gate(indir, out, strategy, cfg)
@@ -94,7 +97,7 @@ def drift(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
     by: str = typer.Option("batch", "--by", help="Metadata column for batch grouping"),
-    config: Optional[Path] = typer.Option(None, "--config", "-c"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
     cfg = load_config(config) if config else {}
     stage_drift(indir, out, by, cfg)
@@ -106,8 +109,8 @@ def stats(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
     group_col: str = typer.Option("condition", "--groups"),
-    values: Optional[str] = typer.Option(None, "--values", help="Comma-separated marker columns"),
-    config: Optional[Path] = typer.Option(None, "--config", "-c"),
+    values: str | None = typer.Option(None, "--values", help="Comma-separated marker columns"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
     cfg = load_config(config) if config else {}
     marker_columns = _resolve_marker_columns(values, cfg)
@@ -130,7 +133,7 @@ def run(
     samplesheet: Path = typer.Option(..., "--samplesheet", exists=True),
     config: Path = typer.Option(..., "--config", exists=True),
     out: Path = typer.Option(..., "--out"),
-    spill: Optional[Path] = typer.Option(None, "--spill"),
+    spill: Path | None = typer.Option(None, "--spill"),
     batch: str = typer.Option("batch", "--batch"),
 ) -> None:
     cfg = load_config(config)
@@ -151,7 +154,11 @@ def run(
     stage_stats(gate_dir, stats_dir, "condition", markers)
 
     report_path = root / "report.html"
-    build_report(str(root), str(cfg.get("report_template", Path("configs/report_template.html.j2"))), str(report_path))
+    build_report(
+        str(root),
+        str(cfg.get("report_template", Path("configs/report_template.html.j2"))),
+        str(report_path),
+    )
     typer.echo(f"Report available at {report_path}")
 
 
@@ -159,7 +166,7 @@ def run(
 # Stage implementations (shared by commands and run())
 
 
-def stage_ingest(samplesheet: Path, out_dir: Path, config: Dict[str, object]) -> None:
+def stage_ingest(samplesheet: Path, out_dir: Path, config: dict[str, Any]) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
@@ -172,9 +179,13 @@ def stage_ingest(samplesheet: Path, out_dir: Path, config: Dict[str, object]) ->
         if row.get("missing_file"):
             typer.echo(f"Skipping missing file {row['file_path']}")
             continue
-        events, metadata = read_fcs(row["file_path"])
-        if channel_map:
-            events = standardize_channels(events, metadata, channel_map)
+        try:
+            events, metadata = read_fcs(row["file_path"])
+            if channel_map:
+                events = standardize_channels(events, metadata, channel_map)
+        except Exception as e:
+            typer.echo(f"Error processing {row['file_path']}: {e}")
+            continue
         sample_id = row["sample_id"]
         save_dataframe(events, events_dir / f"{sample_id}.parquet")
         _write_json(meta_dir / f"{sample_id}.json", metadata)
@@ -190,7 +201,7 @@ def stage_ingest(samplesheet: Path, out_dir: Path, config: Dict[str, object]) ->
     write_manifest(manifest, out_dir / "manifest.csv")
 
 
-def stage_compensate(indir: Path, out_dir: Path, spill: Optional[Path]) -> None:
+def stage_compensate(indir: Path, out_dir: Path, spill: Path | None) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
@@ -219,13 +230,13 @@ def stage_compensate(indir: Path, out_dir: Path, spill: Optional[Path]) -> None:
     write_manifest(out_manifest, out_dir / "manifest.csv")
 
 
-def stage_qc(indir: Path, out_dir: Path, qc_config: Dict[str, Dict[str, float]]) -> None:
+def stage_qc(indir: Path, out_dir: Path, qc_config: dict[str, dict[str, float]]) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
     manifest = read_manifest(indir / "manifest.csv")
 
-    sample_tables: Dict[str, pd.DataFrame] = {}
+    sample_tables: dict[str, pd.DataFrame] = {}
     updated_records = []
 
     for record in manifest.to_dict(orient="records"):
@@ -250,7 +261,7 @@ def stage_qc(indir: Path, out_dir: Path, qc_config: Dict[str, Dict[str, float]])
     plot_qc_summary(summary, str(out_dir / "figures" / "qc_pass.png"))
 
 
-def stage_gate(indir: Path, out_dir: Path, strategy: str, config: Dict[str, object]) -> None:
+def stage_gate(indir: Path, out_dir: Path, strategy: str, config: dict[str, Any]) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     params_dir = ensure_dir(out_dir / "params")
@@ -271,11 +282,13 @@ def stage_gate(indir: Path, out_dir: Path, strategy: str, config: Dict[str, obje
         _write_json(params_dir / f"{sample_id}.json", params)
         record["events_file"] = f"events/{sample_id}.parquet"
         record["params_file"] = f"params/{sample_id}.json"
-        summary_rows.append({
-            "sample_id": sample_id,
-            "input_events": len(df),
-            "gated_events": len(gated),
-        })
+        summary_rows.append(
+            {
+                "sample_id": sample_id,
+                "input_events": len(df),
+                "gated_events": len(gated),
+            }
+        )
 
         plot_gating_scatter(
             df,
@@ -294,16 +307,20 @@ def stage_gate(indir: Path, out_dir: Path, strategy: str, config: Dict[str, obje
     write_manifest(manifest_out, out_dir / "manifest.csv")
 
 
-def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: Dict[str, object]) -> None:
+def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: dict[str, Any]) -> None:
     ensure_dir(out_dir)
     figures_dir = ensure_dir(out_dir / "figures")
     manifest = read_manifest(indir / "manifest.csv")
-    sample_events = {sid: load_dataframe(indir / path) for sid, path in list_stage_events(indir).items()}
+    sample_events = {
+        sid: load_dataframe(indir / path) for sid, path in list_stage_events(indir).items()
+    }
     meta_cols = ["sample_id", batch_col]
     if "condition" in manifest.columns:
         meta_cols.append("condition")
     metadata = manifest[meta_cols].drop_duplicates()
-    marker_channels = config.get("channels", {}).get("markers") if isinstance(config, dict) else None
+    marker_channels = (
+        config.get("channels", {}).get("markers") if isinstance(config, dict) else None
+    )
     if isinstance(marker_channels, list):
         markers = marker_channels
     else:
@@ -321,11 +338,11 @@ def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: Dict[str, ob
     plot_batch_drift_umap(drift_res.get("umap"), str(figures_dir / "umap.png"), batch_col)
 
 
-def stage_stats(indir: Path, out_dir: Path, group_col: str, value_cols: Iterable[str]) -> None:
+def stage_stats(indir: Path, out_dir: Path, group_col: str, value_cols: Any) -> None:
     ensure_dir(out_dir)
     manifest = read_manifest(indir / "manifest.csv")
     records = []
-    columns: Optional[list[str]] = None
+    columns: list[str] | None = None
     for record in manifest.to_dict(orient="records"):
         df = load_dataframe(indir / record["events_file"])
         if columns is None:
@@ -349,18 +366,26 @@ def stage_stats(indir: Path, out_dir: Path, group_col: str, value_cols: Iterable
 # Helpers
 
 
-def _write_json(path: Path, payload: Dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, default=str)
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, default=str)
+    except OSError as e:
+        raise RuntimeError(f"Cannot write to {path}: {e}") from e
 
 
-def _read_json(path: Path) -> Dict[str, object]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+def _read_json(path: Path) -> dict[str, Any]:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except OSError as e:
+        raise RuntimeError(f"Cannot read from {path}: {e}") from e
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in {path}: {e}") from e
 
 
-def _resolve_marker_columns(values: Optional[str], cfg: Dict[str, object]) -> Iterable[str]:
+def _resolve_marker_columns(values: str | None, cfg: dict[str, Any]) -> Any:
     if values:
         return [v.strip() for v in values.split(",") if v.strip()]
     markers = cfg.get("channels", {}).get("markers") if isinstance(cfg, dict) else None
