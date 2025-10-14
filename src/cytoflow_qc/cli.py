@@ -34,6 +34,8 @@ from cytoflow_qc.viz import (
     plot_gating_scatter,
     plot_qc_summary,
 )
+from cytoflow_qc.interactive_viz import launch_interactive_dashboard
+from cytoflow_qc.viz_3d import create_interactive_gating_dashboard, create_publication_ready_figure
 
 app = typer.Typer(add_completion=False, help="Flow cytometry QC and gating pipeline")
 
@@ -123,6 +125,139 @@ def report(
 ) -> None:
     build_report(str(indir), str(template), str(out))
     typer.echo(f"Report written to {out}")
+
+
+@app.command()
+def dashboard(
+    indir: Path = typer.Argument(..., exists=True, help="Results directory from cytoflow-qc run"),
+    sample: str | None = typer.Option(None, "--sample", "-s", help="Specific sample to visualize"),
+    port: int = typer.Option(8501, "--port", "-p", help="Port for Streamlit server"),
+) -> None:
+    """Launch interactive visualization dashboard."""
+    typer.echo(f"🚀 Launching interactive dashboard for results in: {indir}")
+
+    # Import streamlit here to avoid issues if not installed
+    try:
+        import streamlit.web.cli as stcli
+
+        # Set up the script to run
+        script_path = Path(__file__).parent / "interactive_viz.py"
+
+        # Launch streamlit
+        import sys
+        sys.argv = [
+            "streamlit", "run", str(script_path), str(indir),
+            "--server.port", str(port),
+            "--server.address", "0.0.0.0"
+        ]
+
+        stcli.main()
+
+    except ImportError:
+        typer.echo("❌ Streamlit not installed. Install with: pip install streamlit")
+        raise typer.Exit(1)
+    except Exception as e:
+        typer.echo(f"❌ Error launching dashboard: {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def viz3d(
+    indir: Path = typer.Argument(..., exists=True, help="Results directory from cytoflow-qc run"),
+    sample: str | None = typer.Option(None, "--sample", "-s", help="Specific sample to visualize"),
+    output: Path = typer.Option(None, "--output", "-o", help="Output HTML file"),
+    x: str = typer.Option("FSC-A", "--x", help="X-axis channel"),
+    y: str = typer.Option("SSC-A", "--y", help="Y-axis channel"),
+    z: str = typer.Option("CD3-A", "--z", help="Z-axis channel"),
+) -> None:
+    """Create interactive 3D gating visualization."""
+    try:
+        if output:
+            create_interactive_gating_dashboard(indir, sample, output)
+        else:
+            # Just show the visualization (this would need plotly display setup)
+            typer.echo("💡 Tip: Use --output to save HTML file, or run 'cytoflow-qc dashboard' for full interface")
+            typer.echo(f"📁 Results directory: {indir}")
+    except Exception as e:
+        typer.echo(f"❌ Error creating 3D visualization: {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def export(
+    data: Path = typer.Argument(..., exists=True, help="Data file (CSV or Parquet)"),
+    output: Path = typer.Argument(..., help="Output file path"),
+    x: str = typer.Option("FSC-A", "--x", help="X-axis channel"),
+    y: str = typer.Option("SSC-A", "--y", help="Y-axis channel"),
+    z: str | None = typer.Option(None, "--z", help="Z-axis channel (optional for 3D)"),
+    format: str = typer.Option("png", "--format", help="Output format (png, pdf, svg, eps)"),
+    dpi: int = typer.Option(300, "--dpi", help="Resolution for raster formats"),
+    width: int = typer.Option(10, "--width", help="Figure width in inches"),
+    height: int = typer.Option(8, "--height", help="Figure height in inches"),
+) -> None:
+    """Export publication-ready figures."""
+    try:
+        import pandas as pd
+
+        # Load data
+        if data.suffix.lower() == '.parquet':
+            df = pd.read_parquet(data)
+        else:
+            df = pd.read_csv(data)
+
+        # Create publication-ready figure
+        create_publication_ready_figure(
+            df, x, y, z,
+            output, format, dpi, (width, height)
+        )
+
+        typer.echo(f"✅ Publication-ready figure exported to: {output}")
+
+    except Exception as e:
+        typer.echo(f"❌ Error exporting figure: {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def export_dashboard(
+    indir: Path = typer.Argument(..., exists=True, help="Results directory from cytoflow-qc run"),
+    output: Path = typer.Argument(..., help="Output HTML file path"),
+    animations: bool = typer.Option(False, "--animations", help="Include animation features"),
+) -> None:
+    """Export interactive dashboard as HTML file."""
+    try:
+        from cytoflow_qc.interactive_viz import InteractiveVisualizer
+
+        visualizer = InteractiveVisualizer(indir)
+        visualizer.export_interactive_dashboard(output, animations)
+
+        typer.echo(f"✅ Interactive dashboard exported to: {output}")
+
+    except Exception as e:
+        typer.echo(f"❌ Error exporting dashboard: {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def export_3d(
+    indir: Path = typer.Argument(..., exists=True, help="Results directory from cytoflow-qc run"),
+    sample: str = typer.Option(..., "--sample", "-s", help="Sample to visualize"),
+    output: Path = typer.Argument(..., help="Output HTML file path"),
+    x: str = typer.Option("FSC-A", "--x", help="X-axis channel"),
+    y: str = typer.Option("SSC-A", "--y", help="Y-axis channel"),
+    z: str = typer.Option("CD3-A", "--z", help="Z-axis channel"),
+) -> None:
+    """Export 3D gating visualization as HTML file."""
+    try:
+        from cytoflow_qc.viz_3d import create_interactive_gating_dashboard
+
+        create_interactive_gating_dashboard(indir, sample, output)
+
+        typer.echo(f"✅ 3D visualization exported to: {output}")
+
+    except Exception as e:
+        typer.echo(f"❌ Error exporting 3D visualization: {e}")
+        raise typer.Exit(1)
 
 
 @app.command()

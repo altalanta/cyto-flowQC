@@ -30,6 +30,10 @@ docker run --rm -v $(pwd):/workspace cytoflow-qc cytoflow-qc --help
      --config configs/example_config.yaml --out results
    ```
 5. Open `results/report.html` to review QC, gating, drift, and effect-size outputs.
+6. **Optional:** Launch the interactive dashboard for deeper exploration:
+   ```bash
+   cytoflow-qc dashboard --indir results/
+   ```
 
 Reusable Make targets:
 
@@ -38,6 +42,7 @@ Reusable Make targets:
 - `make test` – pytest suite with synthetic data.
 - `make smoke` – one-shot CLI run that checks the HTML report exists.
 - `make report` – rebuild the HTML report from existing artifacts.
+- `make dashboard` – launch the interactive web dashboard (requires results/ directory).
 
 ## Methods (brief)
 
@@ -73,7 +78,55 @@ results/
 │  └─ figures/*.png
 ├─ stats/
 │  └─ effect_sizes.csv
+├─ exports/                    # New: Exported data and figures
+│  ├─ qc_summary.png
+│  ├─ gating_analysis.pdf
+│  └─ cytoflow_qc_data.zip
+├─ interactive_report.html     # New: Interactive dashboard
 └─ report.html
+```
+
+## Interactive Visualization
+
+CytoFlow-QC now includes powerful interactive visualization capabilities:
+
+### Web Dashboard
+
+Launch an interactive web dashboard for exploring results:
+
+```bash
+cytoflow-qc dashboard --indir results/
+```
+
+**Features:**
+- **Overview Dashboard**: Key metrics and pipeline summary
+- **Quality Control Analysis**: Interactive QC metrics and pass/fail distributions
+- **3D Gating Visualization**: Multi-parameter scatter plots with gating inspection
+- **Batch Drift Analysis**: Interactive PCA plots and statistical test results
+- **Statistical Analysis**: Effect size plots and volcano plots
+- **Export Options**: High-resolution figures and data export
+
+### 3D Visualizations
+
+Create interactive 3D gating visualizations:
+
+```bash
+cytoflow-qc viz3d --indir results/ --sample sample_001 --output 3d_gating.html
+```
+
+### Export Capabilities
+
+Export publication-ready figures:
+
+```bash
+# Export QC summary as PDF
+cytoflow-qc export --data results/qc/summary.csv --output qc_summary.pdf --format pdf
+
+# Export 3D gating visualization
+cytoflow-qc export_3d --indir results/ --sample sample_001 --output gating_3d.html
+
+# Export complete interactive dashboard
+cytoflow-qc export_dashboard --indir results/ --output full_report.html
 ```
 
 ## Extending

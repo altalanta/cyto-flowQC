@@ -198,3 +198,4 @@ def show_results_summary(results_dir: Path) -> None:
 
 if __name__ == "__main__":
     main()
+

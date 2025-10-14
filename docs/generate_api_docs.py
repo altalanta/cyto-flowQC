@@ -36,3 +36,4 @@ def generate_api_docs() -> None:
 
 if __name__ == "__main__":
     generate_api_docs()
+

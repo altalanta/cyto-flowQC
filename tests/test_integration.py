@@ -173,3 +173,4 @@ class TestFullPipelineIntegration:
         pd.DataFrame(samplesheet_data).to_csv(samplesheet_path, index=False)
 
         return samplesheet_path
+
