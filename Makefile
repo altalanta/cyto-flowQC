@@ -114,3 +114,7 @@ docker-build: ## Build Docker image
 .PHONY: docker-run
 docker-run: ## Run Docker container
 	docker-compose up
+
+.PHONY: dashboard
+dashboard: ## Launch interactive web dashboard
+	cytoflow-qc dashboard --indir results/

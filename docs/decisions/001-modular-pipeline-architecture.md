@@ -64,3 +64,4 @@ We adopted a modular pipeline architecture with the following design principles:
 - ADR 002: File Format Selection
 - ADR 003: Configuration Schema Design
 - ADR 004: Error Handling Strategy
+

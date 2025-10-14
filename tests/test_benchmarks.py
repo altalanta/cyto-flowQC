@@ -298,3 +298,4 @@ class TestScalability:
 
         # Return the result for potential analysis
         return result
+
