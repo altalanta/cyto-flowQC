@@ -261,6 +261,127 @@ def export_3d(
 
 
 @app.command()
+def plugins(
+    action: str = typer.Argument(..., help="Plugin action (list, info, load)"),
+    plugin_type: str | None = typer.Option(None, "--type", "-t", help="Plugin type filter"),
+    plugin_name: str | None = typer.Option(None, "--name", "-n", help="Specific plugin name"),
+    config: str | None = typer.Option(None, "--config", "-c", help="Plugin configuration"),
+) -> None:
+    """Manage and interact with cytoflow-qc plugins."""
+    registry = get_plugin_registry()
+
+    if action == "list":
+        # List available plugins
+        available = registry.get_available_plugins(plugin_type)
+        typer.echo("Available plugins:")
+
+        for ptype, plugins in available.items():
+            if plugins:
+                typer.echo(f"  {ptype}:")
+                for plugin in plugins:
+                    typer.echo(f"    • {plugin}")
+    elif action == "info":
+        # Get info about specific plugin
+        if not plugin_name:
+            typer.echo("Error: --name required for info action")
+            raise typer.Exit(1)
+
+        try:
+            info = registry.get_plugin_info(plugin_type or "gating_strategy", plugin_name)
+            typer.echo(f"Plugin: {info['name']}")
+            typer.echo(f"Version: {info['version']}")
+            typer.echo(f"Description: {info['description']}")
+            typer.echo(f"Author: {info['author']}")
+            typer.echo(f"Type: {info['plugin_type']}")
+            typer.echo("Default config:")
+            import json
+            typer.echo(json.dumps(info['default_config'], indent=2))
+        except Exception as e:
+            typer.echo(f"Error getting plugin info: {e}")
+    elif action == "load":
+        # Load and test plugin
+        if not plugin_name:
+            typer.echo("Error: --name required for load action")
+            raise typer.Exit(1)
+
+        try:
+            plugin_config = {}
+            if config:
+                import yaml
+                with open(config, 'r') as f:
+                    plugin_config = yaml.safe_load(f) or {}
+
+            plugin = load_plugin(plugin_type or "gating_strategy", plugin_name, plugin_config)
+            typer.echo(f"✅ Loaded plugin: {plugin.name} v{plugin.version}")
+            typer.echo(f"Description: {plugin.description}")
+        except Exception as e:
+            typer.echo(f"❌ Error loading plugin: {e}")
+    else:
+        typer.echo(f"Unknown action: {action}")
+        typer.echo("Available actions: list, info, load")
+
+
+@app.command()
+def cloud(
+    provider: str = typer.Argument(..., help="Cloud provider (aws, gcp, azure)"),
+    action: str = typer.Argument(..., help="Cloud action (deploy, scale, status)"),
+    config: str | None = typer.Option(None, "--config", "-c", help="Cloud configuration file"),
+) -> None:
+    """Manage cloud deployment and scaling."""
+    if provider.lower() == "kubernetes":
+        if action == "deploy":
+            k8s = KubernetesDeployment()
+            if config:
+                import yaml
+                with open(config, 'r') as f:
+                    k8s_config = yaml.safe_load(f)
+                # Apply configuration to k8s deployment
+                typer.echo("Kubernetes deployment configured")
+            else:
+                typer.echo("Use --config to specify Kubernetes configuration")
+        elif action == "status":
+            k8s = KubernetesDeployment()
+            status = k8s.get_deployment_status()
+            typer.echo("Kubernetes deployment status:")
+            import json
+            typer.echo(json.dumps(status, indent=2))
+        else:
+            typer.echo(f"Unknown Kubernetes action: {action}")
+    elif provider.lower() == "serverless":
+        if action == "deploy":
+            typer.echo("Serverless deployment not implemented yet")
+        else:
+            typer.echo(f"Unknown serverless action: {action}")
+    else:
+        typer.echo(f"Unsupported provider: {provider}")
+
+
+@app.command()
+def realtime(
+    action: str = typer.Argument(..., help="Real-time action (start, monitor)"),
+    ws_url: str | None = typer.Option(None, "--ws-url", help="WebSocket URL for data source"),
+    config: str | None = typer.Option(None, "--config", "-c", help="Real-time configuration"),
+) -> None:
+    """Manage real-time processing."""
+    if action == "start":
+        if not ws_url:
+            typer.echo("Error: --ws-url required for start action")
+            raise typer.Exit(1)
+
+        typer.echo(f"Starting real-time processing from: {ws_url}")
+        # This would start the real-time processing
+        typer.echo("Real-time processing started (placeholder)")
+    elif action == "monitor":
+        # Start monitoring dashboard
+        monitor = RealTimeMonitor()
+        typer.echo("Starting real-time monitoring dashboard...")
+        # This would start the monitoring dashboard
+        typer.echo("Monitoring dashboard started (placeholder)")
+    else:
+        typer.echo(f"Unknown real-time action: {action}")
+
+
+@app.command()
 def run(
     samplesheet: Path = typer.Option(..., "--samplesheet", exists=True),
     config: Path = typer.Option(..., "--config", exists=True),

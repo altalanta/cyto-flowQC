@@ -88,3 +88,8 @@ class PluginBase(ABC):
     def __repr__(self) -> str:
         """String representation of the plugin."""
         return f"{self.__class__.__name__}(name='{self.name}', version='{self.version}')"
+
+
+
+
+

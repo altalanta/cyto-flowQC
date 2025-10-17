@@ -164,3 +164,8 @@ class StatsMethodResult:
             f"StatsMethodResult(method='{self.method_name} v{self.method_version}', "
             f"shape={self.stats_data.shape})"
         )
+
+
+
+
+

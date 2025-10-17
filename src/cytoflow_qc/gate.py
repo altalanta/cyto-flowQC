@@ -35,15 +35,33 @@ def auto_gate(
 
     cfg = {**DEFAULT_GATE_CONFIG, **(config or {})}
     chan_cfg = config.get("channels", {}) if config else {}
-    channels = {
-        "fsc_a": chan_cfg.get("fsc_a", "FSC-A"),
-        "ssc_a": chan_cfg.get("ssc_a", "SSC-A"),
-        "fsc_h": chan_cfg.get("fsc_h", "FSC-H"),
-        "viability": chan_cfg.get("viability"),
-    }
+    channels = {}
+
+    # Check for plugin-based gating strategies
+    plugins_config = config.get("plugins", {}) if config else {}
+    gating_plugins = plugins_config.get("gating_strategy", {}) if isinstance(plugins_config, dict) else {}
+
+    if strategy in gating_plugins:
+        # Use plugin-based gating
+        from .plugins import load_plugin
+        try:
+            plugin = load_plugin("gating_strategy", strategy, config)
+            return plugin.apply_gate(df, channels)
+        except Exception as e:
+            print(f"Warning: Plugin gating failed for strategy '{strategy}': {e}")
+            print("Falling back to default gating strategy")
+            # Fall back to default strategy
+
+        # Define channels mapping
+        channels = {
+            "fsc_a": chan_cfg.get("fsc_a", "FSC-A"),
+            "ssc_a": chan_cfg.get("ssc_a", "SSC-A"),
+            "fsc_h": chan_cfg.get("fsc_h", "FSC-H"),
+            "viability": chan_cfg.get("viability"),
+        }
 
     working = df.copy()
-    gate_log: Dict[str, Dict[str, float]] = {}
+    gate_log: dict[str, dict[str, float]] = {}
 
     # Debris gate (use QC flags if present)
     if "qc_debris" in working:
