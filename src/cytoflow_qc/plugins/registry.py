@@ -285,3 +285,8 @@ def discover_plugins(plugin_type: str | None = None) -> dict[str, list[str]]:
 def get_available_plugins(plugin_type: str | None = None) -> dict[str, list[str]]:
     """Get available plugins using the global registry."""
     return _registry.get_available_plugins(plugin_type)
+
+
+
+
+

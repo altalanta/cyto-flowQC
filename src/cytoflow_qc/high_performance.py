@@ -765,3 +765,8 @@ def create_performance_report(
         Path(output_file).write_text(full_report)
 
     return full_report
+
+
+
+
+

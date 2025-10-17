@@ -127,6 +127,74 @@ cytoflow-qc export_3d --indir results/ --sample sample_001 --output gating_3d.ht
 
 # Export complete interactive dashboard
 cytoflow-qc export_dashboard --indir results/ --output full_report.html
+
+## Advanced Features
+
+### Machine Learning Integration
+
+CytoFlow-QC now includes machine learning-based gating strategies:
+
+```bash
+# Use ML-based gating
+cytoflow-qc gate --indir results/qc --out results/gate --strategy lymphocyte_gating --config config.yaml
+
+# Use anomaly detection
+cytoflow-qc gate --indir results/qc --out results/gate --strategy anomaly_detection --config config.yaml
+
+# Use Bayesian optimization for parameter tuning
+cytoflow-qc gate --indir results/qc --out results/gate --strategy bayesian_optimization --config config.yaml
+```
+
+### Cloud-Native Deployment
+
+Deploy cytoflow-qc to cloud platforms for scalability:
+
+```bash
+# Deploy to Kubernetes
+cytoflow-qc cloud deploy --provider kubernetes --config k8s-config.yaml
+
+# Use serverless processing
+cytoflow-qc cloud process --provider aws --function my-function --data s3://bucket/data/
+```
+
+### Real-Time Processing
+
+Process data in real-time as it's acquired:
+
+```bash
+# Start real-time processing
+cytoflow-qc realtime start --ws-url ws://instrument:8080 --output results/
+
+# Monitor processing in real-time
+cytoflow-qc realtime monitor --dashboard-port 8081
+```
+
+### High-Performance Computing
+
+Optimize for large datasets:
+
+```bash
+# Use streaming processing for large files
+cytoflow-qc process --streaming --chunk-size 50000 --input large_file.csv
+
+# Enable parallel processing
+cytoflow-qc process --parallel --workers 8 --input data_directory/
+```
+
+### Custom Plugin Development
+
+Extend cytoflow-qc with custom plugins:
+
+```bash
+# List available plugins
+cytoflow-qc plugins list
+
+# Use custom gating strategy
+cytoflow-qc gate --strategy my_custom_plugin --config plugins.yaml
+
+# Develop new plugins
+cytoflow-qc plugins create --template gating --name my_plugin
+```
 ```
 
 ## Extending
