@@ -118,3 +118,15 @@ docker-run: ## Run Docker container
 .PHONY: dashboard
 dashboard: ## Launch interactive web dashboard
 	cytoflow-qc dashboard --indir results/
+
+.PHONY: api
+api: ## Start REST API server
+	python -m cytoflow_qc.api
+
+.PHONY: serve
+serve: ## Start both dashboard and API
+	@echo "Starting cytoflow-qc services..."
+	@echo "Dashboard: http://localhost:8501"
+	@echo "API: http://localhost:8000"
+	@echo "Press Ctrl+C to stop"
+	@trap 'kill 0' INT; python -m cytoflow_qc.api & cytoflow-qc dashboard --indir results/ --port 8501

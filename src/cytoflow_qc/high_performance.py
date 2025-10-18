@@ -737,14 +737,14 @@ def create_performance_report(
     # Timing information
     report.append("⏱️  Execution Times:")
     for operation, time_taken in timings.items():
-        report.append(f"  {operation}: {time_taken".3f"}s")
+        report.append(f"  {operation}: {time_taken:.3f}s")
 
     report.append("")
 
     # Memory information
     report.append("🧠 Memory Usage:")
     for checkpoint, memory in memory_usage.items():
-        report.append(f"  {checkpoint}: {memory".2f"} GB")
+        report.append(f"  {checkpoint}: {memory:.2f} GB")
 
     report.append("")
 
@@ -752,12 +752,12 @@ def create_performance_report(
     if timings:
         total_time = sum(timings.values())
         report.append("📊 Summary:")
-        report.append(f"  Total execution time: {total_time".3f"}s")
-        report.append(f"  Average operation time: {total_time / len(timings)".3f"}s")
+        report.append(f"  Total execution time: {total_time:.3f}s")
+        report.append(f"  Average operation time: {total_time / len(timings):.3f}s")
 
     if memory_usage:
         max_memory = max(memory_usage.values())
-        report.append(f"  Peak memory usage: {max_memory".2f"} GB")
+        report.append(f"  Peak memory usage: {max_memory:.2f} GB")
 
     full_report = "\n".join(report)
 
@@ -765,6 +765,7 @@ def create_performance_report(
         Path(output_file).write_text(full_report)
 
     return full_report
+
 
 
 

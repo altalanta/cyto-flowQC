@@ -115,15 +115,15 @@ class InteractiveVisualizer:
                 total_samples = len(self.qc_data)
                 mean_qc_pass = self.qc_data["qc_pass_fraction"].mean()
                 st.metric("Samples Processed", total_samples)
-                st.metric("Mean QC Pass Rate", f"{mean_qc_pass".1%"}")
+                st.metric("Mean QC Pass Rate", f"{mean_qc_pass:.1%}")
 
         with col2:
             if self.gate_data is not None:
                 total_events = self.gate_data["input_events"].sum()
                 gated_events = self.gate_data["gated_events"].sum()
                 retention_rate = gated_events / total_events if total_events > 0 else 0
-                st.metric("Total Events", f"{total_events","}")
-                st.metric("Retention Rate", f"{retention_rate".1%"}")
+                st.metric("Total Events", f"{total_events:,}")
+                st.metric("Retention Rate", f"{retention_rate:.1%}")
 
         with col3:
             if self.drift_tests is not None:
@@ -467,7 +467,7 @@ class InteractiveVisualizer:
 
         with col3:
             mean_effect = self.stats_data["effect_size"].abs().mean()
-            st.metric("Mean |Effect Size|", f"{mean_effect".3f"}")
+            st.metric("Mean |Effect Size|", f"{mean_effect:.3f}")
 
     def _show_export_options(self) -> None:
         """Show export options for figures and data."""
@@ -1366,7 +1366,7 @@ class InteractiveVisualizer:
                         </div>
                         <div class="metric-card">
                             <div class="metric-label">QC Pass Rate</div>
-                            <div class="metric-value">{self.qc_data["qc_pass_fraction"].mean()".1%"}</div>
+                            <div class="metric-value">{self.qc_data["qc_pass_fraction"].mean():.1%}</div>
                         </div>
             """
 
@@ -1378,11 +1378,11 @@ class InteractiveVisualizer:
             html_content += f"""
                         <div class="metric-card">
                             <div class="metric-label">Total Events</div>
-                            <div class="metric-value">{total_events","}</div>
+                            <div class="metric-value">{total_events:,}</div>
                         </div>
                         <div class="metric-card">
                             <div class="metric-label">Retention Rate</div>
-                            <div class="metric-value">{retention_rate".1%"}</div>
+                            <div class="metric-value">{retention_rate:.1%}</div>
                         </div>
             """
 
