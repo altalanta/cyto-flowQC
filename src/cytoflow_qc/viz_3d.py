@@ -623,7 +623,7 @@ def create_publication_ready_figure(
     x_col: str,
     y_col: str,
     z_col: str | None = None,
-    output_path: str | Path,
+    output_path: str | Path | None = None,
     format: str = "png",
     dpi: int = 300,
     figsize: tuple[int, int] = (10, 8)
@@ -706,19 +706,23 @@ def create_publication_ready_figure(
     # Improve layout
     plt.tight_layout()
 
-    # Save with high quality
-    output_path = Path(output_path)
-    if format.lower() == 'pdf':
-        fig.savefig(output_path, format='pdf', dpi=dpi, bbox_inches='tight')
-    elif format.lower() == 'svg':
-        fig.savefig(output_path, format='svg', dpi=dpi, bbox_inches='tight')
-    elif format.lower() == 'eps':
-        fig.savefig(output_path, format='eps', dpi=dpi, bbox_inches='tight')
+    # Save with high quality if output_path provided
+    if output_path is not None:
+        output_path = Path(output_path)
+        if format.lower() == 'pdf':
+            fig.savefig(output_path, format='pdf', dpi=dpi, bbox_inches='tight')
+        elif format.lower() == 'svg':
+            fig.savefig(output_path, format='svg', dpi=dpi, bbox_inches='tight')
+        elif format.lower() == 'eps':
+            fig.savefig(output_path, format='eps', dpi=dpi, bbox_inches='tight')
+        else:
+            fig.savefig(output_path, format='png', dpi=dpi, bbox_inches='tight')
+
+        print(f"Publication-ready figure saved to: {output_path}")
     else:
-        fig.savefig(output_path, format='png', dpi=dpi, bbox_inches='tight')
+        plt.show()
 
     plt.close()
-    print(f"Publication-ready figure saved to: {output_path}")
 
 
 if __name__ == "__main__":
@@ -741,6 +745,7 @@ if __name__ == "__main__":
         df, "FSC-A", "SSC-A", "CD3-A",
         output_file, format_type, dpi=300, figsize=(12, 10)
     )
+
 
 
 
