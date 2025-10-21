@@ -238,3 +238,5 @@ class CustomGatingExample(GatingStrategyPlugin):
         return adaptive_threshold
 
 
+
+
