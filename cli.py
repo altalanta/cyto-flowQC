@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Iterable, Optional, Any
 
 import pandas as pd
 import typer
@@ -36,6 +36,12 @@ from cytoflow_qc.viz import (
 )
 from cytoflow_qc.interactive_viz import launch_interactive_dashboard
 from cytoflow_qc.viz_3d import create_interactive_gating_dashboard, create_publication_ready_figure
+from cytoflow_qc.plugins import get_plugin_registry, load_plugin
+from cytoflow_qc.cloud import KubernetesDeployment, CloudStorage
+from cytoflow_qc.realtime import WebSocketProcessor, RealTimeMonitor
+from cytoflow_qc.security import DataAnonymizer, DataEncryptor, RBACManager, SecurityError
+from cytoflow_qc.experiment_design import ExperimentManager, CohortManager
+from cytoflow_qc.data_connectors import get_connector, DataSourceError
 
 app = typer.Typer(add_completion=False, help="Flow cytometry QC and gating pipeline")
 
@@ -51,7 +57,7 @@ def _version(ctx: typer.Context, version: bool = typer.Option(False, "--version"
 def ingest(
     samplesheet: Path = typer.Argument(..., exists=True, readable=True),
     out: Path = typer.Argument(...),
-    config: Optional[Path] = typer.Option(None, "--config", "-c", help="Optional YAML config"),
+    config: dict[str, object] | None = typer.Option(None, "--config", "-c", help="Optional YAML config"),
 ) -> None:
     cfg = load_config(config) if config else {}
     stage_ingest(samplesheet, out, cfg)
@@ -62,7 +68,7 @@ def ingest(
 def compensate(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
-    spill: Optional[Path] = typer.Option(None, "--spill", help="Override spillover CSV"),
+    spill: Path | None = typer.Option(None, "--spill", help="Override spillover CSV"),
 ) -> None:
     stage_compensate(indir, out, spill)
     typer.echo(f"Compensated events -> {out}")
@@ -72,7 +78,7 @@ def compensate(
 def qc(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
-    config: Optional[Path] = typer.Option(None, "--config", "-c"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
     cfg = load_config(config) if config else {}
     stage_qc(indir, out, cfg.get("qc", {}))
@@ -84,7 +90,7 @@ def gate(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
     strategy: str = typer.Option("default", "--strategy"),
-    config: Optional[Path] = typer.Option(None, "--config", "-c"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
     cfg = load_config(config) if config else {}
     stage_gate(indir, out, strategy, cfg)
@@ -96,7 +102,7 @@ def drift(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
     by: str = typer.Option("batch", "--by", help="Metadata column for batch grouping"),
-    config: Optional[Path] = typer.Option(None, "--config", "-c"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
     cfg = load_config(config) if config else {}
     stage_drift(indir, out, by, cfg)
@@ -108,8 +114,8 @@ def stats(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
     group_col: str = typer.Option("condition", "--groups"),
-    values: Optional[str] = typer.Option(None, "--values", help="Comma-separated marker columns"),
-    config: Optional[Path] = typer.Option(None, "--config", "-c"),
+    values: str | None = typer.Option(None, "--values", help="Comma-separated marker columns"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
     cfg = load_config(config) if config else {}
     marker_columns = _resolve_marker_columns(values, cfg)
@@ -165,7 +171,7 @@ def dashboard(
 def viz3d(
     indir: Path = typer.Argument(..., exists=True, help="Results directory from cytoflow-qc run"),
     sample: str | None = typer.Option(None, "--sample", "-s", help="Specific sample to visualize"),
-    output: Path = typer.Option(None, "--output", "-o", help="Output HTML file"),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Output HTML file"),
     x: str = typer.Option("FSC-A", "--x", help="X-axis channel"),
     y: str = typer.Option("SSC-A", "--y", help="Y-axis channel"),
     z: str = typer.Option("CD3-A", "--z", help="Z-axis channel"),
@@ -305,7 +311,7 @@ def plugins(
             raise typer.Exit(1)
 
         try:
-            plugin_config = {}
+            plugin_config: dict[str, Any] = {}
             if config:
                 import yaml
                 with open(config, 'r') as f:
@@ -382,11 +388,157 @@ def realtime(
 
 
 @app.command()
+def anonymize(
+    indir: Path = typer.Argument(..., exists=True, help="Input directory containing dataframes"),
+    outdir: Path = typer.Argument(..., help="Output directory for anonymized dataframes"),
+    columns: str = typer.Option(..., "--columns", "-c", help="Comma-separated list of columns to anonymize"),
+    identifier_col: str | None = typer.Option(None, "--identifier", "-i", help="Column to use as a stable identifier for consistent anonymization"),
+) -> None:
+    """Anonymize sensitive data in specified columns of dataframes."""
+    ensure_dir(outdir)
+    anonymizer = DataAnonymizer()
+    cols_to_anon = [c.strip() for c in columns.split(",") if c.strip()]
+
+    typer.echo(f"Anonymizing data in {indir} and saving to {outdir}...")
+
+    try:
+        for sample_id, events_file in list_stage_events(indir).items():
+            df = load_dataframe(indir / events_file)
+            anonymized_df = anonymizer.anonymize_dataframe(df, cols_to_anon, identifier_col)
+            save_dataframe(anonymized_df, outdir / Path(events_file).name)
+            typer.echo(f"✅ Anonymized {sample_id}")
+        typer.echo("🎉 All specified dataframes anonymized successfully!")
+    except Exception as e:
+        typer.echo(f"❌ Error during anonymization: {e}")
+        raise typer.Exit(code=1)
+
+@app.command()
+def encrypt(
+    infile: Path = typer.Argument(..., exists=True, readable=True, help="Input file to encrypt"),
+    outfile: Path = typer.Argument(..., help="Output file for encrypted data"),
+    key_path: Path | None = typer.Option(None, "--key-path", "-k", help="Path to encryption key file"),
+) -> None:
+    """Encrypt a file using a symmetric encryption key."""
+    try:
+        encryptor = DataEncryptor(key_path=key_path)
+        encryptor.encrypt_file(infile, outfile)
+        typer.echo(f"✅ File '{infile}' encrypted to '{outfile}' successfully!")
+    except SecurityError as e:
+        typer.echo(f"❌ Encryption Error: {e}")
+        raise typer.Exit(code=1)
+    except FileNotFoundError as e:
+        typer.echo(f"❌ Error: {e}")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.echo(f"❌ An unexpected error occurred during encryption: {e}")
+        raise typer.Exit(code=1)
+
+@app.command()
+def decrypt(
+    infile: Path = typer.Argument(..., exists=True, readable=True, help="Input encrypted file"),
+    outfile: Path = typer.Argument(..., help="Output file for decrypted data"),
+    key_path: Path | None = typer.Option(None, "--key-path", "-k", help="Path to encryption key file"),
+) -> None:
+    """Decrypt an encrypted file."""
+    try:
+        encryptor = DataEncryptor(key_path=key_path)
+        encryptor.decrypt_file(infile, outfile)
+        typer.echo(f"✅ File '{infile}' decrypted to '{outfile}' successfully!")
+    except SecurityError as e:
+        typer.echo(f"❌ Decryption Error: {e}")
+        raise typer.Exit(code=1)
+    except FileNotFoundError as e:
+        typer.echo(f"❌ Error: {e}")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.echo(f"❌ An unexpected error occurred during decryption: {e}")
+        raise typer.Exit(code=1)
+
+@app.command()
+def rbac(
+    roles: str = typer.Option(..., "--roles", "-r", help="Comma-separated list of user roles"),
+    action: str = typer.Argument(..., help="Action to check (e.g., 'read', 'write')"),
+    resource: str = typer.Argument(..., help="Resource to access (e.g., 'data_raw', 'reports')"),
+    policy_file: Path | None = typer.Option(None, "--policy-file", "-p", help="Path to custom RBAC policy JSON file"),
+) -> None:
+    """Check role-based access control permissions."""
+    rbac_manager = RBACManager(policy_file=policy_file)
+    user_roles = [r.strip() for r in roles.split(",") if r.strip()]
+
+    typer.echo(f"Checking if roles {user_roles} can '{action}' resource '{resource}'...")
+    if rbac_manager.check_permission(user_roles, action, resource):
+        typer.echo(f"✅ Permission granted for roles {user_roles} to {action} {resource}.")
+    else:
+        typer.echo(f"❌ Permission denied for roles {user_roles} to {action} {resource}.")
+        raise typer.Exit(code=1)
+
+@app.command(name="data-source")
+def data_source_cmd(
+    action: str = typer.Argument(..., help="Action to perform (configure, list, ingest)"),
+    uri: str = typer.Option("file:///", "--uri", "-u", help="Base URI for the data source"),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Path to data source configuration YAML file"),
+    pattern: str = typer.Option("*.fcs", "--pattern", "-p", help="Glob pattern for listing/ingesting files"),
+    output_dir: Path | None = typer.Option(None, "--output-dir", "-o", help="Output directory for ingested files"),
+) -> None:
+    """Manage data source connectors and ingest data."""
+    connector_config: dict[str, Any] = {}
+    if config:
+        import yaml
+        with open(config, 'r') as f:
+            connector_config = yaml.safe_load(f)
+
+    try:
+        connector = get_connector(uri, connector_config)
+
+        if action == "list":
+            typer.echo(f"Listing files in '{uri}' with pattern '{pattern}':")
+            found_files = list(connector.list_files(uri, pattern))
+            if found_files:
+                for f in found_files:
+                    typer.echo(f"  - {f}")
+            else:
+                typer.echo("No files found.")
+        elif action == "configure":
+            typer.echo(f"Configured data source for URI: {uri}")
+            if connector_config:
+                typer.echo(f"  with configuration: {json.dumps(connector_config, indent=2)}")
+            else:
+                typer.echo("  (using default configuration)")
+        elif action == "ingest":
+            if not output_dir:
+                typer.echo("Error: --output-dir is required for ingest action.")
+                raise typer.Exit(1)
+            ensure_dir(output_dir)
+
+            typer.echo(f"Ingesting files from '{uri}' (pattern: '{pattern}') to '{output_dir}'...")
+            ingested_count = 0
+            for remote_file_uri in connector.list_files(uri, pattern):
+                local_file_path = output_dir / Path(remote_file_uri).name
+                try:
+                    file_content = connector.read_file(remote_file_uri)
+                    local_file_path.write_bytes(file_content)
+                    typer.echo(f"  ✅ Ingested {remote_file_uri} to {local_file_path}")
+                    ingested_count += 1
+                except Exception as e:
+                    typer.echo(f"  ❌ Failed to ingest {remote_file_uri}: {e}")
+            typer.echo(f"🎉 Ingestion complete: {ingested_count} files successfully ingested.")
+        else:
+            typer.echo(f"Unknown action: {action}. Available actions: configure, list, ingest")
+            raise typer.Exit(1)
+    except (ValueError, ImportError, DataSourceError) as e:
+        typer.echo(f"❌ Data Source Error: {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        typer.echo(f"❌ An unexpected error occurred with data source: {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
 def run(
     samplesheet: Path = typer.Option(..., "--samplesheet", exists=True),
     config: Path = typer.Option(..., "--config", exists=True),
     out: Path = typer.Option(..., "--out"),
-    spill: Optional[Path] = typer.Option(None, "--spill"),
+    spill: Path | None = typer.Option(None, "--spill"),
     batch: str = typer.Option("batch", "--batch"),
 ) -> None:
     cfg = load_config(config)
@@ -415,7 +567,7 @@ def run(
 # Stage implementations (shared by commands and run())
 
 
-def stage_ingest(samplesheet: Path, out_dir: Path, config: Dict[str, object]) -> None:
+def stage_ingest(samplesheet: Path, out_dir: Path, config: dict[str, object]) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
@@ -446,7 +598,7 @@ def stage_ingest(samplesheet: Path, out_dir: Path, config: Dict[str, object]) ->
     write_manifest(manifest, out_dir / "manifest.csv")
 
 
-def stage_compensate(indir: Path, out_dir: Path, spill: Optional[Path]) -> None:
+def stage_compensate(indir: Path, out_dir: Path, spill: Path | None) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
@@ -475,13 +627,13 @@ def stage_compensate(indir: Path, out_dir: Path, spill: Optional[Path]) -> None:
     write_manifest(out_manifest, out_dir / "manifest.csv")
 
 
-def stage_qc(indir: Path, out_dir: Path, qc_config: Dict[str, Dict[str, float]]) -> None:
+def stage_qc(indir: Path, out_dir: Path, qc_config: dict[str, dict[str, float]]) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
     manifest = read_manifest(indir / "manifest.csv")
 
-    sample_tables: Dict[str, pd.DataFrame] = {}
+    sample_tables: dict[str, pd.DataFrame] = {}
     updated_records = []
 
     for record in manifest.to_dict(orient="records"):
@@ -506,7 +658,7 @@ def stage_qc(indir: Path, out_dir: Path, qc_config: Dict[str, Dict[str, float]])
     plot_qc_summary(summary, str(out_dir / "figures" / "qc_pass.png"))
 
 
-def stage_gate(indir: Path, out_dir: Path, strategy: str, config: Dict[str, object]) -> None:
+def stage_gate(indir: Path, out_dir: Path, strategy: str, config: dict[str, object]) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     params_dir = ensure_dir(out_dir / "params")
@@ -550,7 +702,7 @@ def stage_gate(indir: Path, out_dir: Path, strategy: str, config: Dict[str, obje
     write_manifest(manifest_out, out_dir / "manifest.csv")
 
 
-def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: Dict[str, object]) -> None:
+def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: dict[str, object]) -> None:
     ensure_dir(out_dir)
     figures_dir = ensure_dir(out_dir / "figures")
     manifest = read_manifest(indir / "manifest.csv")
@@ -581,7 +733,7 @@ def stage_stats(indir: Path, out_dir: Path, group_col: str, value_cols: Iterable
     ensure_dir(out_dir)
     manifest = read_manifest(indir / "manifest.csv")
     records = []
-    columns: Optional[list[str]] = None
+    columns: list[str] | None = None
     for record in manifest.to_dict(orient="records"):
         df = load_dataframe(indir / record["events_file"])
         if columns is None:
@@ -605,18 +757,18 @@ def stage_stats(indir: Path, out_dir: Path, group_col: str, value_cols: Iterable
 # Helpers
 
 
-def _write_json(path: Path, payload: Dict[str, object]) -> None:
+def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, default=str)
 
 
-def _read_json(path: Path) -> Dict[str, object]:
+def _read_json(path: Path) -> dict[str, object]:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def _resolve_marker_columns(values: Optional[str], cfg: Dict[str, object]) -> Iterable[str]:
+def _resolve_marker_columns(values: str | None, cfg: dict[str, object]) -> Iterable[str]:
     if values:
         return [v.strip() for v in values.split(",") if v.strip()]
     markers = cfg.get("channels", {}).get("markers") if isinstance(cfg, dict) else None
