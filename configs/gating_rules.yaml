@@ -1,0 +1,46 @@
+# Rule-based gating fallbacks when automatic methods fail
+
+gates:
+  debris:
+    type: 'rectangular'
+    channels: ['FSC-A', 'SSC-A']
+    bounds:
+      FSC-A: [1000, 250000]
+      SSC-A: [1000, 250000]
+  
+  singlets:
+    type: 'linear'
+    x_channel: 'FSC-A'
+    y_channel: 'FSC-H'
+    slope: 1.0
+    intercept: 0.0
+    tolerance: 0.05
+  
+  lymphocytes:
+    type: 'polygon'
+    channels: ['FSC-A', 'SSC-A']
+    vertices:  # rough lymphocyte gate coordinates
+      - [30000, 10000]
+      - [80000, 15000]
+      - [100000, 40000]
+      - [60000, 50000]
+      - [25000, 30000]
+  
+  viability:
+    type: 'threshold'
+    channel: 'Zombie_Aqua-A'
+    threshold: 5000
+    direction: 'below'  # live cells are below threshold
+
+# Population hierarchy - gates applied in order
+hierarchy:
+  - 'debris'      # remove debris first
+  - 'singlets'    # then doublets
+  - 'lymphocytes' # then select lymphocytes
+  - 'viability'   # finally apply viability if channel present
+
+# Quality filters
+quality:
+  min_events_per_sample: 1000
+  max_saturation_rate: 0.05  # fail samples with >5% saturated events
+  min_recording_time: 30     # minimum seconds of acquisition

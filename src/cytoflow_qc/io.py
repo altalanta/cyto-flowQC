@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+# Import the new data connector factory
+from cytoflow_qc.data_connectors import get_connector, DataSourceConnector
 
 try:  # pragma: no cover - optional dependency
     import flowkit as fk
@@ -27,21 +31,26 @@ REQUIRED_SAMPLE_COLUMNS = {
 }
 
 
-def load_samplesheet(path: str) -> pd.DataFrame:
-    """Read and validate the experiment samplesheet.
+def load_samplesheet(uri: str) -> pd.DataFrame:
+    """Read and validate the experiment samplesheet from a given URI.
 
     The loader enforces required columns, normalises path columns to absolute
-    paths, and preserves any extra metadata columns for downstream joins.
+    paths (if local), and preserves any extra metadata columns for downstream joins.
     Missing files are tolerated but reported via a ``missing_file`` column so the
     CLI can surface a warning while still allowing dry runs with placeholder
     paths (useful for CI tests with synthetic data).
     """
 
-    sheet_path = Path(path)
-    if not sheet_path.exists():
-        raise FileNotFoundError(f"Samplesheet not found: {sheet_path}")
+    connector = get_connector(uri)
 
-    df = pd.read_csv(sheet_path)
+    try:
+        # Read samplesheet using the connector
+        df = connector.read_dataframe(uri)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Samplesheet not found: {uri}")
+    except ValueError as e:
+        raise ValueError(f"Error reading samplesheet from {uri}: {e}")
+
     missing_cols = REQUIRED_SAMPLE_COLUMNS.difference(df.columns)
     if missing_cols:
         raise ValueError(f"Samplesheet missing columns: {sorted(missing_cols)}")
@@ -50,40 +59,51 @@ def load_samplesheet(path: str) -> pd.DataFrame:
         dupes = df[df["sample_id"].duplicated()]["sample_id"].tolist()
         raise ValueError(f"Duplicate sample_id values: {dupes}")
 
-    df["file_path"] = df["file_path"].apply(lambda p: str((sheet_path.parent / p).resolve()))
-    df["missing_file"] = df["file_path"].apply(lambda p: not Path(p).exists())
+    # Normalize file_path column. If local, make absolute. Otherwise, keep as is.
+    if uri.startswith("file://") or "://" not in uri:
+        # Assuming local file system for now, will need a better way to get base path
+        # for relative paths within a remote URI if that becomes a requirement.
+        base_path = Path(uri).parent if "://" in uri else Path(uri).parent
+        df["file_path"] = df["file_path"].apply(lambda p: str((base_path / p).resolve()))
+        df["missing_file"] = df["file_path"].apply(lambda p: not Path(p).exists())
+    else:
+        # For remote URIs, assume file_path is already a valid URI or relative to base_uri
+        # No easy way to check existence without another connector call per file, which could be slow.
+        # For now, mark as not missing and rely on read_fcs to handle FileNotFoundError.
+        df["missing_file"] = False
+
     return df
 
 
-def read_fcs(file_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-    """Load event-level data from an FCS (or CSV surrogate) file.
+def read_fcs(file_uri: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Load event-level data from an FCS (or CSV/Parquet surrogate) file via connector.
 
-    The function accepts CSV/TSV/Parquet surrogates for testing. When real FCS
+    The function accepts URIs for various data sources. When real FCS
     parsing libraries are installed it will prefer ``flowkit`` and fall back to
     ``fcsparser``. Metadata always includes a ``channels`` list and the number of
     events; spillover matrices are propagated when present.
     """
 
-    path = Path(file_path)
-    if not path.exists():
-        raise FileNotFoundError(f"File does not exist: {file_path}")
+    connector = get_connector(file_uri)
 
-    suffix = path.suffix.lower()
+    file_bytes = connector.read_file(file_uri)
+
+    suffix = Path(file_uri).suffix.lower()
     metadata: Dict[str, Any] = {
-        "source_path": str(path),
+        "source_path": file_uri,
     }
 
     if suffix in {".csv", ".tsv"}:
         sep = "," if suffix == ".csv" else "\t"
-        df = pd.read_csv(path, sep=sep)
+        df = pd.read_csv(io.BytesIO(file_bytes), sep=sep)
     elif suffix in {".parquet", ".pq"}:
-        df = pd.read_parquet(path)
+        df = pd.read_parquet(io.BytesIO(file_bytes))
     else:
-        df = _read_fcs_binary(path, metadata)
+        df = _read_fcs_binary(file_uri, file_bytes, metadata)
 
     metadata["n_events"] = len(df)
     metadata["channels"] = df.columns.tolist()
-    metadata.setdefault("sample_id", path.stem)
+    metadata.setdefault("sample_id", Path(file_uri).stem)
     return df, metadata
 
 
@@ -113,39 +133,46 @@ def standardize_channels(
     return renamed
 
 
-def _read_fcs_binary(path: Path, metadata: Dict[str, Any]) -> pd.DataFrame:
-    """Internal helper that loads a binary FCS file via flowkit/fcsparser."""
+def _read_fcs_binary(file_uri: str, file_bytes: bytes, metadata: Dict[str, Any]) -> pd.DataFrame:
+    """Internal helper that loads a binary FCS file via flowkit/fcsparser from bytes."""
+    # flowkit and fcsparser typically expect file paths or file-like objects, not raw bytes directly.
+    # We'll write the bytes to a temporary file for these libraries.
 
-    if fk is not None:  # pragma: no branch
-        try:
-            sample = fk.Sample(str(path))
-            metadata.update(
-                {
-                    "sample_id": sample.id,
-                    "acquisition_date": getattr(sample, "acquisition_date", None),
-                }
+    # Use tempfile to create a temporary file to write the bytes into
+    with tempfile.NamedTemporaryFile(delete=True, suffix=".fcs") as tmp_file:
+        tmp_file.write(file_bytes)
+        tmp_file_path = Path(tmp_file.name)
+
+        if fk is not None:  # pragma: no branch
+            try:
+                sample = fk.Sample(str(tmp_file_path))
+                metadata.update(
+                    {
+                        "sample_id": sample.id,
+                        "acquisition_date": getattr(sample, "acquisition_date", None),
+                    }
+                )
+                if sample.compensation is not None:
+                    metadata["spillover_matrix"] = sample.compensation.matrix
+                    metadata["spillover_channels"] = sample.compensation.fluorochrome_labels
+                return sample.as_dataframe(source="raw")
+            except Exception:  # pragma: no cover - fall back to fcsparser
+                pass
+
+        if fcsparser is None:
+            raise ImportError(
+                "No FCS reader available. Install flowkit or fcsparser to read binary FCS files."
             )
-            if sample.compensation is not None:
-                metadata["spillover_matrix"] = sample.compensation.matrix
-                metadata["spillover_channels"] = sample.compensation.fluorochrome_labels
-            return sample.as_dataframe(source="raw")
-        except Exception:  # pragma: no cover - fall back to fcsparser
-            pass
 
-    if fcsparser is None:
-        raise ImportError(
-            "No FCS reader available. Install flowkit or fcsparser to read binary FCS files."
-        )
-
-    meta, data = fcsparser.parse(str(path), reformat_meta=True)
-    metadata["keywords"] = meta
-    if "$SPILLOVER" in meta:
-        spill = _parse_spillover_keyword(meta["$SPILLOVER"])
-        if spill is not None:
-            matrix, channels = spill
-            metadata["spillover_matrix"] = matrix
-            metadata["spillover_channels"] = channels
-    return pd.DataFrame(data)
+        meta, data = fcsparser.parse(str(tmp_file_path), reformat_meta=True)
+        metadata["keywords"] = meta
+        if "$SPILLOVER" in meta:
+            spill = _parse_spillover_keyword(meta["$SPILLOVER"])
+            if spill is not None:
+                matrix, channels = spill
+                metadata["spillover_matrix"] = matrix
+                metadata["spillover_channels"] = channels
+        return pd.DataFrame(data)
 
 
 def _parse_spillover_keyword(value: Any) -> Optional[Tuple[np.ndarray, list[str]]]:

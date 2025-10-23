@@ -1,0 +1,5 @@
+sample_id,file_path,batch,condition,replicate,panel,stain,compensation_matrix
+sample_001,sample_data/sample_001.csv,batch1,control,1,T_cell_panel,full,
+sample_002,sample_data/sample_002.csv,batch1,treatment,2,T_cell_panel,full,
+sample_003,sample_data/sample_003.csv,batch2,control,1,T_cell_panel,full,
+sample_004,sample_data/sample_004.csv,batch2,treatment,2,T_cell_panel,full,
