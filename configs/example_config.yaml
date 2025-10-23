@@ -1,0 +1,58 @@
+channels:
+  fsc_a: 'FSC-A'
+  fsc_h: 'FSC-H'
+  fsc_w: 'FSC-W'
+  ssc_a: 'SSC-A'
+  ssc_h: 'SSC-H'
+  viability: 'Zombie_Aqua-A'   # optional
+  markers: 
+    - 'CD3-A'
+    - 'CD19-A'
+    - 'CD56-A'
+    - 'CD4-A'
+    - 'CD8-A'
+
+qc:
+  debris:
+    method: 'percentile'       # or 'gmm'
+    fsc_a_pct: 2
+    ssc_a_pct: 2
+  doublets:
+    slope: 1.0
+    intercept: 0.0
+    tol: 0.02
+  channel_qc:
+    saturation_threshold: 0.95  # flag channels with >95% saturated events
+    min_dynamic_range: 2        # log10 units
+    min_snr: 3                  # signal-to-noise ratio
+
+viability:
+  threshold: 5000              # raw or transformed units
+  direction: 'below'           # live cells are below threshold
+
+gating:
+  strategy: 'default'          # extensible
+  lymphocytes:
+    method: 'density'          # density-based on FSC/SSC
+    percentile: 90            # take events within 90th percentile density
+  singlets:
+    method: 'linear'           # linear gate on FSC-A vs FSC-H
+    slope_tolerance: 0.05      # deviation from slope=1
+
+compensation:
+  method: 'auto'               # 'auto', 'matrix', or 'none'
+  matrix_file: null            # path to compensation matrix CSV
+
+transforms:
+  method: 'logicle'            # 'logicle', 'asinh', or 'log'
+  parameters:
+    T: 262144                  # top of scale
+    W: 0.5                     # linear region width
+    M: 4.5                     # number of decades
+    A: 0                       # additional decades
+
+report:
+  include_umap: true
+  include_drift_plots: true
+  figure_format: 'png'         # 'png' or 'svg'
+  dpi: 300

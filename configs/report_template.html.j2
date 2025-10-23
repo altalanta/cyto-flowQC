@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CytoFlow-QC Report</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h1 { font-size: 2.5em; margin-bottom: 30px; }
+        h2 { font-size: 2em; margin-top: 40px; }
+        h3 { font-size: 1.5em; margin-top: 30px; border-bottom: 1px solid #bdc3c7; }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .summary-card {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+        }
+        .summary-card h4 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        .summary-card .metric {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .figure {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 6px;
+        }
+        .figure img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .figure-caption {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+        }
+        
+        .alert {
+            padding: 15px;
+            margin: 20px 0;
+            border: 1px solid transparent;
+            border-radius: 4px;
+        }
+        .alert-warning {
+            color: #8a6d3b;
+            background-color: #fcf8e3;
+            border-color: #faebcc;
+        }
+        .alert-danger {
+            color: #a94442;
+            background-color: #f2dede;
+            border-color: #ebccd1;
+        }
+        .alert-success {
+            color: #3c763d;
+            background-color: #dff0d8;
+            border-color: #d6e9c6;
+        }
+        
+        .timestamp {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-top: 30px;
+            text-align: center;
+            border-top: 1px solid #ecf0f1;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧬 CytoFlow-QC Analysis Report</h1>
+        
+        <div class="summary-grid">
+            <div class="summary-card">
+                <h4>Total Samples</h4>
+                <div class="metric">{{ summary.total_samples }}</div>
+            </div>
+            <div class="summary-card">
+                <h4>Processed Events</h4>
+                <div class="metric">{{ "{:,}".format(summary.total_events) }}</div>
+            </div>
+            <div class="summary-card">
+                <h4>QC Pass Rate</h4>
+                <div class="metric">{{ "%.1f"|format(summary.qc_pass_rate * 100) }}%</div>
+            </div>
+            <div class="summary-card">
+                <h4>Analysis Date</h4>
+                <div class="metric">{{ summary.analysis_date }}</div>
+            </div>
+        </div>
+
+        {% if quality_issues %}
+        <div class="alert alert-warning">
+            <strong>Quality Issues Detected:</strong>
+            <ul>
+            {% for issue in quality_issues %}
+                <li>{{ issue }}</li>
+            {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <h2>📊 Quality Control Summary</h2>
+        
+        {% if qc_table %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Sample ID</th>
+                    <th>Total Events</th>
+                    <th>Debris %</th>
+                    <th>Doublets %</th>
+                    <th>Viable %</th>
+                    <th>QC Status</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in qc_table %}
+                <tr>
+                    <td>{{ row.sample_id }}</td>
+                    <td>{{ "{:,}".format(row.total_events) }}</td>
+                    <td>{{ "%.1f"|format(row.debris_pct) }}</td>
+                    <td>{{ "%.1f"|format(row.doublets_pct) }}</td>
+                    <td>{{ "%.1f"|format(row.viable_pct) }}</td>
+                    <td>
+                        {% if row.qc_pass %}
+                            <span style="color: #27ae60;">✓ PASS</span>
+                        {% else %}
+                            <span style="color: #e74c3c;">✗ FAIL</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {% if qc_plots %}
+        <h3>QC Visualization</h3>
+        {% for plot in qc_plots %}
+        <div class="figure">
+            <img src="{{ plot.path }}" alt="{{ plot.caption }}">
+            <div class="figure-caption">{{ plot.caption }}</div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <h2>🎯 Gating Results</h2>
+        
+        {% if gating_summary %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Population</th>
+                    <th>Mean %</th>
+                    <th>SD</th>
+                    <th>CV %</th>
+                    <th>Range</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for pop in gating_summary %}
+                <tr>
+                    <td>{{ pop.population }}</td>
+                    <td>{{ "%.1f"|format(pop.mean_pct) }}</td>
+                    <td>{{ "%.2f"|format(pop.std) }}</td>
+                    <td>{{ "%.1f"|format(pop.cv) }}</td>
+                    <td>{{ "%.1f - %.1f"|format(pop.min_pct, pop.max_pct) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {% if gating_plots %}
+        <h3>Gating Strategy</h3>
+        {% for plot in gating_plots %}
+        <div class="figure">
+            <img src="{{ plot.path }}" alt="{{ plot.caption }}">
+            <div class="figure-caption">{{ plot.caption }}</div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if include_drift_plots and drift_results %}
+        <h2>📈 Batch Drift Analysis</h2>
+        
+        {% if drift_results.significant_drift %}
+        <div class="alert alert-warning">
+            <strong>Significant batch effects detected</strong> in the following parameters:
+            {{ drift_results.significant_parameters|join(', ') }}
+        </div>
+        {% else %}
+        <div class="alert alert-success">
+            <strong>No significant batch effects detected.</strong>
+        </div>
+        {% endif %}
+
+        {% if drift_plots %}
+        {% for plot in drift_plots %}
+        <div class="figure">
+            <img src="{{ plot.path }}" alt="{{ plot.caption }}">
+            <div class="figure-caption">{{ plot.caption }}</div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endif %}
+
+        <h2>📈 Statistical Analysis</h2>
+        
+        {% if stats_table %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Comparison</th>
+                    <th>Parameter</th>
+                    <th>Effect Size</th>
+                    <th>P-value</th>
+                    <th>Adj. P-value</th>
+                    <th>Significance</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in stats_table %}
+                <tr>
+                    <td>{{ row.comparison }}</td>
+                    <td>{{ row.parameter }}</td>
+                    <td>{{ "%.3f"|format(row.effect_size) }}</td>
+                    <td>{{ "%.4f"|format(row.p_value) if row.p_value >= 0.0001 else "<0.0001" }}</td>
+                    <td>{{ "%.4f"|format(row.adj_p_value) if row.adj_p_value >= 0.0001 else "<0.0001" }}</td>
+                    <td>
+                        {% if row.significant %}
+                            <span style="color: #e74c3c;">*</span>
+                        {% else %}
+                            <span style="color: #95a5a6;">ns</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {% if include_umap and umap_plot %}
+        <h2>🗺️ UMAP Visualization</h2>
+        <div class="figure">
+            <img src="{{ umap_plot.path }}" alt="{{ umap_plot.caption }}">
+            <div class="figure-caption">{{ umap_plot.caption }}</div>
+        </div>
+        {% endif %}
+
+        <h2>⚙️ Methods</h2>
+        <p><strong>Analysis Pipeline:</strong> {{ config.pipeline_version if config else "CytoFlow-QC v1.0" }}</p>
+        <p><strong>Compensation:</strong> {{ config.compensation.method if config else "Auto-detected from FCS files" }}</p>
+        <p><strong>Transform:</strong> {{ config.transforms.method if config else "Logicle transform" }}</p>
+        <p><strong>Gating Strategy:</strong> {{ config.gating.strategy if config else "Automated density-based gating" }}</p>
+        <p><strong>Statistical Tests:</strong> Mann-Whitney U test with Holm-Bonferroni correction</p>
+
+        <div class="timestamp">
+            Report generated on {{ timestamp }} by CytoFlow-QC
+        </div>
+    </div>
+</body>
+</html>

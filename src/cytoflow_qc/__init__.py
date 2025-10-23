@@ -13,3 +13,6 @@ from . import cli, compensate, drift, gate, io, qc, report, stats, utils
 from . import interactive_viz, viz_3d
 from . import plugins, ml_plugins
 from . import cloud, realtime, high_performance
+from . import security
+from . import experiment_design
+from . import data_connectors
