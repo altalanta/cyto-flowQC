@@ -207,3 +207,4 @@ class TestCohortManager:
         assert sorted(details["sample_ids"]) == sorted(["S1", "S2", "S3"])
 
 
+

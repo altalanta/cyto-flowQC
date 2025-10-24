@@ -146,3 +146,4 @@ class CustomQCMethod(QCMethodPlugin):
             "outlier_fraction": outlier_fraction,
             "sample_flagged": outlier_fraction >= min_outlier_fraction,
         }
+
