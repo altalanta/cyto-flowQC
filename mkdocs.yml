@@ -1,0 +1,40 @@
+site_name: CytoFlow-QC
+site_description: 'Automated, reproducible quality control, compensation, and gating for flow cytometry experiments.'
+site_author: 'CytoFlow-QC Team'
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light vs dark mode
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+repo_url: https://github.com/your-username/cytoflow-qc # TODO: Please update this
+repo_name: cytoflow-qc
+
+nav:
+  - 'Home': 'index.md'
+  - 'Quickstart': 'quickstart.md'
+  - 'Methods': 'methods.md'
+  - 'Architecture': 'architecture.md'
+  - 'Guides':
+    - 'Performance': 'guides/performance.md'
+    - 'Troubleshooting': 'guides/troubleshooting.md'
+  - 'Plugins': 'plugins/README.md'
+  - 'API': 'api.md' # Assuming generate_api_docs.py creates this
+
+# Add a placeholder index.md if it doesn't exist
+# You can copy the content of README.md to docs/index.md to get started.
