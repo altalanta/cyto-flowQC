@@ -1,6 +1,60 @@
+[tool.poetry]
+name = "cytoflow-qc"
+version = "0.1.0"
+description = "Automated QC and gating pipeline for flow cytometry data"
+authors = ["CytoFlow-QC Team"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "cytoflow_qc", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+flowkit = ">=0.9.0"
+flowutils = ">=0.1.0"
+fcsparser = ">=0.2.0"
+numpy = ">=1.24.0"
+pandas = ">=2.0.0"
+scipy = ">=1.10.0"
+scikit-learn = ">=1.2.0"
+statsmodels = ">=0.14.0"
+matplotlib = ">=3.7.0"
+seaborn = ">=0.12.0"
+typer = ">=0.9.0"
+jinja2 = ">=3.1.0"
+umap-learn = ">=0.5.0"
+nbconvert = ">=7.0.0"
+snakemake = ">=7.0.0"
+pyyaml = ">=6.0"
+streamlit = ">=1.28.0"
+plotly = ">=5.17.0"
+bokeh = ">=3.3.0"
+altair = ">=5.1.0"
+kaleido = ">=0.2.1"
+cryptography = ">=41.0.0"
+pydantic = ">=2.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=7.0.0"
+pytest-cov = ">=4.0.0"
+pytest-benchmark = ">=4.0.0"
+pytest-xdist = ">=3.0.0"
+hypothesis = ">=6.0.0"
+mutmut = ">=2.0.0"
+faker = ">=19.0.0"
+ruff = ">=0.1.0"
+black = ">=23.0.0"
+pre-commit = ">=3.0.0"
+mypy = ">=1.0.0"
+mkdocs = ">=1.4.0"
+mkdocs-material = ">=9.0.0"
+
+[tool.poetry.group.cloud.dependencies]
+boto3 = ">=1.28.0"
+google-cloud-storage = ">=2.11.0"
+
 [build-system]
-requires = ["setuptools>=68", "setuptools_scm>=8", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "cytoflow-qc"
