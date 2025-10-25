@@ -4,13 +4,20 @@ Automated, reproducible quality control, compensation, and gating for flow cytom
 
 ## Install
 
-### Conda / mamba
+### Poetry (Recommended)
 
-```bash
-mamba env create -f env/environment.yml
-mamba activate cytoflow-qc
-pip install -e .[dev]
-```
+1. Install Poetry:
+   ```bash
+   curl -sSL https://install.python-poetry.org | python3 -
+   ```
+2. Configure Poetry to create virtual environments in the project's root:
+   ```bash
+   poetry config virtualenvs.in-project true
+   ```
+3. Install dependencies:
+   ```bash
+   poetry install --with dev
+   ```
 
 ### Docker
 
@@ -37,7 +44,7 @@ docker run --rm -v $(pwd):/workspace cytoflow-qc cytoflow-qc --help
 
 Reusable Make targets:
 
-- `make setup` – create the conda env and install pre-commit hooks.
+- `make setup` – create the poetry env and install pre-commit hooks.
 - `make lint` / `make format` – ruff + black.
 - `make test` – pytest suite with synthetic data.
 - `make smoke` – one-shot CLI run that checks the HTML report exists.

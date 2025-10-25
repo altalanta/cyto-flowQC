@@ -11,20 +11,14 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
 .PHONY: setup
-setup: ## Create conda env and install hooks
-	@echo "Setting up development environment..."
-	conda env create -f env/environment.yml --force
-	conda run -n cytoflow-qc pip install -e .
-	conda run -n cytoflow-qc pre-commit install
+setup: ## Create environment and install dependencies with Poetry
+	@echo "Setting up development environment with Poetry..."
+	poetry install --with dev --with cloud
+	poetry run pre-commit install
 
 .PHONY: setup-pip
-setup-pip: $(VENV)/bin/activate ## Alternative setup with pip/venv
-$(VENV)/bin/activate: env/requirements.txt
-	$(PYTHON) -m venv $(VENV)
-	$(PIP) install --upgrade pip
-	$(PIP) install -r env/requirements.txt
-	$(PIP) install -e .[dev]
-	$(VENV)/bin/pre-commit install
+setup-pip: ## This target is now an alias for setup
+	@$(MAKE) setup
 
 .PHONY: lint
 lint: ## Run ruff linter
@@ -42,51 +36,27 @@ type-check: ## Run mypy type checking
 
 .PHONY: test
 test: ## Run pytest
-	@if command -v conda >/dev/null 2>&1; then \
-		conda run -n cytoflow-qc python -m pytest -v; \
-	else \
-		python -m pytest -v; \
-	fi
+	poetry run pytest -v --cov=cytoflow_qc --cov-report=xml
 
 .PHONY: test-cov
 test-cov: ## Run pytest with coverage
-	@if command -v conda >/dev/null 2>&1; then \
-		conda run -n cytoflow-qc pytest --cov=cytoflow_qc --cov-report=html --cov-report=term; \
-	else \
-		pytest --cov=cytoflow_qc --cov-report=html --cov-report=term; \
-	fi
+	poetry run pytest --cov=cytoflow_qc --cov-report=html --cov-report=term
 
 .PHONY: test-integration
 test-integration: ## Run integration tests only
-	@if command -v conda >/dev/null 2>&1; then \
-		conda run -n cytoflow-qc python -m pytest -v -m integration; \
-	else \
-		python -m pytest -v -m integration; \
-	fi
+	poetry run pytest -v -m integration
 
 .PHONY: test-benchmark
 test-benchmark: ## Run performance benchmarks
-	@if command -v conda >/dev/null 2>&1; then \
-		conda run -n cytoflow-qc python -m pytest -v -m benchmark --benchmark-only; \
-	else \
-		python -m pytest -v -m benchmark --benchmark-only; \
-	fi
+	poetry run pytest -v -m benchmark --benchmark-only
 
 .PHONY: test-property
 test-property: ## Run property-based tests
-	@if command -v conda >/dev/null 2>&1; then \
-		conda run -n cytoflow-qc python -m pytest -v -m property; \
-	else \
-		python -m pytest -v -m property; \
-	fi
+	poetry run pytest -v -m property
 
 .PHONY: test-fast
 test-fast: ## Run tests quickly (skip slow tests)
-	@if command -v conda >/dev/null 2>&1; then \
-		conda run -n cytoflow-qc python -m pytest -v -m "not integration and not benchmark"; \
-	else \
-		python -m pytest -v -m "not integration and not benchmark"; \
-	fi
+	poetry run pytest -v -m "not integration and not benchmark"
 
 .PHONY: build
 build: ## Build package (sdist/wheel)
