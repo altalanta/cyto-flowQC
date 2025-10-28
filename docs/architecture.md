@@ -86,3 +86,5 @@ The plugin system (`src/cytoflow_qc/plugins/`) is a cornerstone of `cytoflow-qc`
 This modular design promotes flexibility, allowing `cytoflow-qc` to adapt to diverse experimental needs and analytical approaches.
 
 
+
+

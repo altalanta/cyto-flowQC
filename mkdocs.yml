@@ -22,7 +22,7 @@ theme:
     - search.highlight
     - content.code.copy
 
-repo_url: https://github.com/your-username/cytoflow-qc # TODO: Please update this
+repo_url: https://github.com/cytoflow-qc/cytoflow-qc
 repo_name: cytoflow-qc
 
 nav:
@@ -34,7 +34,10 @@ nav:
     - 'Performance': 'guides/performance.md'
     - 'Troubleshooting': 'guides/troubleshooting.md'
   - 'Plugins': 'plugins/README.md'
-  - 'API': 'api.md' # Assuming generate_api_docs.py creates this
+  - 'API':
+    - 'cytoflow_qc': 'api/cytoflow_qc/index.html'
 
 # Add a placeholder index.md if it doesn't exist
 # You can copy the content of README.md to docs/index.md to get started.
+
+
