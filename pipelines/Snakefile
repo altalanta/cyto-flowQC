@@ -1,0 +1,22 @@
+"""Minimal Snakemake pipeline for CytoFlow-QC."""
+
+SAMPLESHEET = "samplesheets/example_samplesheet.csv"
+CONFIG = "configs/example_config.yaml"
+OUTDIR = "results"
+
+
+rule all:
+    input:
+        f"{OUTDIR}/report.html"
+
+
+rule run_pipeline:
+    output:
+        report=f"{OUTDIR}/report.html"
+    shell:
+        """
+        cytoflow-qc run \
+          --samplesheet {SAMPLESHEET} \
+          --config {CONFIG} \
+          --out {OUTDIR}
+        """
