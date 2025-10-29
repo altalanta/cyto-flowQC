@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from scipy.stats import gaussian_kde
+
+from cytoflow_qc.exceptions import GatingError
 
 
 @dataclass
@@ -24,72 +27,50 @@ DEFAULT_GATE_CONFIG: Dict[str, Dict[str, float]] = {
 
 
 def auto_gate(
-    df: pd.DataFrame,
-    strategy: str = "default",
-    config: Optional[Dict[str, Dict[str, float]]] = None,
-) -> Tuple[pd.DataFrame, Dict[str, Dict[str, float]]]:
+    df: pd.DataFrame, strategy: str, config: Dict[str, Any]
+) -> Tuple[pd.DataFrame, Dict[str, float]]:
     """Apply the selected gating strategy and return gated data + parameters."""
 
-    if strategy != "default":
-        raise ValueError(f"Unsupported gating strategy: {strategy}")
+    if "qc_debris" not in df.columns or "qc_doublet" not in df.columns:
+        raise GatingError("QC flags must be computed before gating. Run 'qc' stage first.")
 
-    cfg = {**DEFAULT_GATE_CONFIG, **(config or {})}
-    chan_cfg = config.get("channels", {}) if config else {}
-    channels = {}
+    # Apply QC filters first
+    df_clean = df[~df["qc_debris"] & ~df["qc_doublet"]].copy()
 
-    # Check for plugin-based gating strategies
-    plugins_config = config.get("plugins", {}) if config else {}
-    gating_plugins = plugins_config.get("gating_strategy", {}) if isinstance(plugins_config, dict) else {}
-
-    if strategy in gating_plugins:
-        # Use plugin-based gating
-        from .plugins import load_plugin
-        try:
-            plugin = load_plugin("gating_strategy", strategy, config)
-            return plugin.apply_gate(df, channels)
-        except Exception as e:
-            print(f"Warning: Plugin gating failed for strategy '{strategy}': {e}")
-            print("Falling back to default gating strategy")
-            # Fall back to default strategy
-
-        # Define channels mapping
-        channels = {
-            "fsc_a": chan_cfg.get("fsc_a", "FSC-A"),
-            "ssc_a": chan_cfg.get("ssc_a", "SSC-A"),
-            "fsc_h": chan_cfg.get("fsc_h", "FSC-H"),
-            "viability": chan_cfg.get("viability"),
-        }
-
-    working = df.copy()
-    gate_log: dict[str, dict[str, float]] = {}
-
-    # Debris gate (use QC flags if present)
-    if "qc_debris" in working:
-        mask = ~working["qc_debris"]
-        params = {"source": "qc_flag"}
+    if strategy == "default":
+        return _default_gating_strategy(df_clean, config)
     else:
-        result = _debris_gate(working, channels, cfg["debris"])
-        mask, params = result.mask, result.params
-    working = working.loc[mask].copy()
-    gate_log["debris"] = params | {"remaining": float(mask.mean())}
+        raise GatingError(f"Unsupported gating strategy: {strategy}")
 
-    # Singlets
-    result = _singlet_gate(working, channels, cfg["singlets"])
-    working = working.loc[result.mask].copy()
-    gate_log["singlets"] = result.params | {"remaining": float(result.mask.mean())}
 
-    # Lymphocytes
-    result = _lymph_gate(working, channels, cfg["lymphocytes"])
-    working = working.loc[result.mask].copy()
-    gate_log["lymphocytes"] = result.params | {"remaining": float(result.mask.mean())}
+def _default_gating_strategy(
+    df: pd.DataFrame, config: Dict[str, Any]
+) -> Tuple[pd.DataFrame, Dict[str, float]]:
+    """Default gating: density-based lymphocyte gate."""
+    channels = config.get("channels", {})
+    fsc_col = channels.get("fsc_a", "FSC-A")
+    ssc_col = channels.get("ssc_a", "SSC-A")
 
-    # Viability (optional)
-    if channels.get("viability") and channels["viability"] in working.columns:
-        result = _viability_gate(working, channels, cfg["viability"])
-        working = working.loc[result.mask].copy()
-        gate_log["viability"] = result.params | {"remaining": float(result.mask.mean())}
+    if fsc_col not in df.columns or ssc_col not in df.columns:
+        raise GatingError(f"Required channels for gating not found: {fsc_col}, {ssc_col}")
 
-    return working, gate_log
+    # Density-based gating for lymphocytes
+    gate_params = config.get("lymphocytes", {})
+    percentile = gate_params.get("percentile", 90)
+    
+    # Subset to avoid memory issues with KDE on large data
+    sample_df = df if len(df) < 50000 else df.sample(n=50000)
+    
+    kde = gaussian_kde(sample_df[[fsc_col, ssc_col]].T)
+    density = kde(df[[fsc_col, ssc_col]].T)
+    density_threshold = np.percentile(density, 100 - percentile)
+    
+    df["gate_lymphocyte"] = density > density_threshold
+    
+    gated_df = df[df["gate_lymphocyte"]].copy()
+    params = {"lymphocyte_density_threshold": density_threshold}
+    
+    return gated_df, params
 
 
 def _debris_gate(df: pd.DataFrame, channels: Dict[str, Optional[str]], config: Dict[str, float]) -> GateResult:

@@ -8,6 +8,8 @@ from typing import Dict, Iterable, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from cytoflow_qc.exceptions import DataProcessingError
+
 
 def get_spillover(
     metadata: Dict[str, object],
