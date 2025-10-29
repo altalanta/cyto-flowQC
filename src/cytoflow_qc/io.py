@@ -11,6 +11,7 @@ import pandas as pd
 
 # Import the new data connector factory
 from cytoflow_qc.data_connectors import get_connector, DataSourceConnector
+from cytoflow_qc.exceptions import FileOperationError
 
 try:  # pragma: no cover - optional dependency
     import flowkit as fk
@@ -47,17 +48,17 @@ def load_samplesheet(uri: str) -> pd.DataFrame:
         # Read samplesheet using the connector
         df = connector.read_dataframe(uri)
     except FileNotFoundError:
-        raise FileNotFoundError(f"Samplesheet not found: {uri}")
+        raise FileOperationError(f"Samplesheet not found: {uri}")
     except ValueError as e:
-        raise ValueError(f"Error reading samplesheet from {uri}: {e}")
+        raise FileOperationError(f"Error reading samplesheet from {uri}: {e}")
 
     missing_cols = REQUIRED_SAMPLE_COLUMNS.difference(df.columns)
     if missing_cols:
-        raise ValueError(f"Samplesheet missing columns: {sorted(missing_cols)}")
+        raise FileOperationError(f"Samplesheet missing columns: {sorted(missing_cols)}")
 
     if df["sample_id"].duplicated().any():
         dupes = df[df["sample_id"].duplicated()]["sample_id"].tolist()
-        raise ValueError(f"Duplicate sample_id values: {dupes}")
+        raise FileOperationError(f"Duplicate sample_id values: {dupes}")
 
     # Normalize file_path column. If local, make absolute. Otherwise, keep as is.
     if uri.startswith("file://") or "://" not in uri:

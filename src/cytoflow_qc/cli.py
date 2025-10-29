@@ -163,6 +163,7 @@ Commands:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Iterable, Optional, Any
 
@@ -171,16 +172,18 @@ import typer
 
 from cytoflow_qc import __version__
 from cytoflow_qc.compensate import apply_compensation, get_spillover
+from cytoflow_qc.config import AppConfig, load_and_validate_config
 from cytoflow_qc.drift import compute_batch_drift, extract_sample_features
+from cytoflow_qc.exceptions import CytoflowQCError
 from cytoflow_qc.gate import auto_gate
 from cytoflow_qc.io import load_samplesheet, read_fcs, standardize_channels
+from cytoflow_qc.log_config import setup_logging
 from cytoflow_qc.qc import add_qc_flags, qc_summary
 from cytoflow_qc.report import build_report
 from cytoflow_qc.stats import effect_sizes
 from cytoflow_qc.utils import (
     ensure_dir,
     list_stage_events,
-    load_config,
     load_dataframe,
     read_manifest,
     save_dataframe,
@@ -204,6 +207,7 @@ from cytoflow_qc.experiment_design import ExperimentManager, CohortManager
 from cytoflow_qc.data_connectors import get_connector, DataSourceError
 
 app = typer.Typer(add_completion=False, help="Flow cytometry QC and gating pipeline")
+logger = logging.getLogger("cytoflow_qc")
 
 
 @app.callback()
@@ -219,9 +223,9 @@ def ingest(
     out: Path = typer.Argument(...),
     config: dict[str, object] | None = typer.Option(None, "--config", "-c", help="Optional YAML config"),
 ) -> None:
-    cfg = load_config(config) if config else {}
+    cfg = load_and_validate_config(config) if config else {}
     stage_ingest(samplesheet, out, cfg)
-    typer.echo(f"Ingested samples -> {out}")
+    logger.info(f"Ingested samples -> {out}")
 
 
 @app.command()
@@ -231,7 +235,7 @@ def compensate(
     spill: Path | None = typer.Option(None, "--spill", help="Override spillover CSV"),
 ) -> None:
     stage_compensate(indir, out, spill)
-    typer.echo(f"Compensated events -> {out}")
+    logger.info(f"Compensated events -> {out}")
 
 
 @app.command()
@@ -240,9 +244,9 @@ def qc(
     out: Path = typer.Argument(...),
     config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
-    cfg = load_config(config) if config else {}
-    stage_qc(indir, out, cfg.get("qc", {}))
-    typer.echo(f"QC annotations -> {out}")
+    cfg = load_and_validate_config(config) if config else AppConfig()
+    stage_qc(indir, out, cfg.qc)
+    logger.info(f"QC annotations -> {out}")
 
 
 @app.command()
@@ -252,9 +256,9 @@ def gate(
     strategy: str = typer.Option("default", "--strategy"),
     config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
-    cfg = load_config(config) if config else {}
+    cfg = load_and_validate_config(config) if config else AppConfig()
     stage_gate(indir, out, strategy, cfg)
-    typer.echo(f"Gated populations -> {out}")
+    logger.info(f"Gated populations -> {out}")
 
 
 @app.command()
@@ -264,9 +268,9 @@ def drift(
     by: str = typer.Option("batch", "--by", help="Metadata column for batch grouping"),
     config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
-    cfg = load_config(config) if config else {}
+    cfg = load_and_validate_config(config) if config else AppConfig()
     stage_drift(indir, out, by, cfg)
-    typer.echo(f"Batch drift analysis -> {out}")
+    logger.info(f"Batch drift analysis -> {out}")
 
 
 @app.command()
@@ -277,10 +281,10 @@ def stats(
     values: str | None = typer.Option(None, "--values", help="Comma-separated marker columns"),
     config: Path | None = typer.Option(None, "--config", "-c"),
 ) -> None:
-    cfg = load_config(config) if config else {}
+    cfg = load_and_validate_config(config) if config else AppConfig()
     marker_columns = _resolve_marker_columns(values, cfg)
     stage_stats(indir, out, group_col, marker_columns)
-    typer.echo(f"Effect-size statistics -> {out}")
+    logger.info(f"Effect-size statistics -> {out}")
 
 
 @app.command()
@@ -290,7 +294,7 @@ def report(
     template: Path = typer.Option(Path("configs/report_template.html.j2"), "--template"),
 ) -> None:
     build_report(str(indir), str(template), str(out))
-    typer.echo(f"Report written to {out}")
+    logger.info(f"Report written to {out}")
 
 
 @app.command()
@@ -300,7 +304,7 @@ def dashboard(
     port: int = typer.Option(8501, "--port", "-p", help="Port for Streamlit server"),
 ) -> None:
     """Launch interactive visualization dashboard."""
-    typer.echo(f"🚀 Launching interactive dashboard for results in: {indir}")
+    logger.info(f"🚀 Launching interactive dashboard for results in: {indir}")
 
     # Import streamlit here to avoid issues if not installed
     try:
@@ -320,10 +324,10 @@ def dashboard(
         stcli.main()
 
     except ImportError:
-        typer.echo("❌ Streamlit not installed. Install with: pip install streamlit")
+        logger.error("❌ Streamlit not installed. Install with: pip install streamlit")
         raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"❌ Error launching dashboard: {e}")
+        logger.error(f"❌ Error launching dashboard: {e}")
         raise typer.Exit(1)
 
 
@@ -342,10 +346,10 @@ def viz3d(
             create_interactive_gating_dashboard(indir, sample, output)
         else:
             # Just show the visualization (this would need plotly display setup)
-            typer.echo("💡 Tip: Use --output to save HTML file, or run 'cytoflow-qc dashboard' for full interface")
-            typer.echo(f"📁 Results directory: {indir}")
+            logger.info("💡 Tip: Use --output to save HTML file, or run 'cytoflow-qc dashboard' for full interface")
+            logger.info(f"📁 Results directory: {indir}")
     except Exception as e:
-        typer.echo(f"❌ Error creating 3D visualization: {e}")
+        logger.error(f"❌ Error creating 3D visualization: {e}")
         raise typer.Exit(1)
 
 
@@ -377,10 +381,10 @@ def export(
             output, format, dpi, (width, height)
         )
 
-        typer.echo(f"✅ Publication-ready figure exported to: {output}")
+        logger.info(f"✅ Publication-ready figure exported to: {output}")
 
     except Exception as e:
-        typer.echo(f"❌ Error exporting figure: {e}")
+        logger.error(f"❌ Error exporting figure: {e}")
         raise typer.Exit(1)
 
 
@@ -397,10 +401,10 @@ def export_dashboard(
         visualizer = InteractiveVisualizer(indir)
         visualizer.export_interactive_dashboard(output, animations)
 
-        typer.echo(f"✅ Interactive dashboard exported to: {output}")
+        logger.info(f"✅ Interactive dashboard exported to: {output}")
 
     except Exception as e:
-        typer.echo(f"❌ Error exporting dashboard: {e}")
+        logger.error(f"❌ Error exporting dashboard: {e}")
         raise typer.Exit(1)
 
 
@@ -419,10 +423,10 @@ def export_3d(
 
         create_interactive_gating_dashboard(indir, sample, output)
 
-        typer.echo(f"✅ 3D visualization exported to: {output}")
+        logger.info(f"✅ 3D visualization exported to: {output}")
 
     except Exception as e:
-        typer.echo(f"❌ Error exporting 3D visualization: {e}")
+        logger.error(f"❌ Error exporting 3D visualization: {e}")
         raise typer.Exit(1)
 
 
@@ -439,35 +443,35 @@ def plugins(
     if action == "list":
         # List available plugins
         available = registry.get_available_plugins(plugin_type)
-        typer.echo("Available plugins:")
+        logger.info("Available plugins:")
 
         for ptype, plugins in available.items():
             if plugins:
-                typer.echo(f"  {ptype}:")
+                logger.info(f"  {ptype}:")
                 for plugin in plugins:
-                    typer.echo(f"    • {plugin}")
+                    logger.info(f"    • {plugin}")
     elif action == "info":
         # Get info about specific plugin
         if not plugin_name:
-            typer.echo("Error: --name required for info action")
+            logger.error("Error: --name required for info action")
             raise typer.Exit(1)
 
         try:
             info = registry.get_plugin_info(plugin_type or "gating_strategy", plugin_name)
-            typer.echo(f"Plugin: {info['name']}")
-            typer.echo(f"Version: {info['version']}")
-            typer.echo(f"Description: {info['description']}")
-            typer.echo(f"Author: {info['author']}")
-            typer.echo(f"Type: {info['plugin_type']}")
-            typer.echo("Default config:")
+            logger.info(f"Plugin: {info['name']}")
+            logger.info(f"Version: {info['version']}")
+            logger.info(f"Description: {info['description']}")
+            logger.info(f"Author: {info['author']}")
+            logger.info(f"Type: {info['plugin_type']}")
+            logger.info("Default config:")
             import json
-            typer.echo(json.dumps(info['default_config'], indent=2))
+            logger.info(json.dumps(info['default_config'], indent=2))
         except Exception as e:
-            typer.echo(f"Error getting plugin info: {e}")
+            logger.error(f"Error getting plugin info: {e}")
     elif action == "load":
         # Load and test plugin
         if not plugin_name:
-            typer.echo("Error: --name required for load action")
+            logger.error("Error: --name required for load action")
             raise typer.Exit(1)
 
         try:
@@ -478,13 +482,13 @@ def plugins(
                     plugin_config = yaml.safe_load(f) or {}
 
             plugin = load_plugin(plugin_type or "gating_strategy", plugin_name, plugin_config)
-            typer.echo(f"✅ Loaded plugin: {plugin.name} v{plugin.version}")
-            typer.echo(f"Description: {plugin.description}")
+            logger.info(f"✅ Loaded plugin: {plugin.name} v{plugin.version}")
+            logger.info(f"Description: {plugin.description}")
         except Exception as e:
-            typer.echo(f"❌ Error loading plugin: {e}")
+            logger.error(f"❌ Error loading plugin: {e}")
     else:
-        typer.echo(f"Unknown action: {action}")
-        typer.echo("Available actions: list, info, load")
+        logger.error(f"Unknown action: {action}")
+        logger.info("Available actions: list, info, load")
 
 
 @app.command()
@@ -502,24 +506,24 @@ def cloud(
                 with open(config, 'r') as f:
                     k8s_config = yaml.safe_load(f)
                 # Apply configuration to k8s deployment
-                typer.echo("Kubernetes deployment configured")
+                logger.info("Kubernetes deployment configured")
             else:
-                typer.echo("Use --config to specify Kubernetes configuration")
+                logger.info("Use --config to specify Kubernetes configuration")
         elif action == "status":
             k8s = KubernetesDeployment()
             status = k8s.get_deployment_status()
-            typer.echo("Kubernetes deployment status:")
+            logger.info("Kubernetes deployment status:")
             import json
-            typer.echo(json.dumps(status, indent=2))
+            logger.info(json.dumps(status, indent=2))
         else:
-            typer.echo(f"Unknown Kubernetes action: {action}")
+            logger.error(f"Unknown Kubernetes action: {action}")
     elif provider.lower() == "serverless":
         if action == "deploy":
-            typer.echo("Serverless deployment not implemented yet")
+            logger.warning("Serverless deployment not implemented yet")
         else:
-            typer.echo(f"Unknown serverless action: {action}")
+            logger.error(f"Unknown serverless action: {action}")
     else:
-        typer.echo(f"Unsupported provider: {provider}")
+        logger.error(f"Unsupported provider: {provider}")
 
 
 @app.command()
@@ -531,20 +535,20 @@ def realtime(
     """Manage real-time processing."""
     if action == "start":
         if not ws_url:
-            typer.echo("Error: --ws-url required for start action")
+            logger.error("Error: --ws-url required for start action")
             raise typer.Exit(1)
 
-        typer.echo(f"Starting real-time processing from: {ws_url}")
+        logger.info(f"Starting real-time processing from: {ws_url}")
         # This would start the real-time processing
-        typer.echo("Real-time processing started (placeholder)")
+        logger.info("Real-time processing started (placeholder)")
     elif action == "monitor":
         # Start monitoring dashboard
         monitor = RealTimeMonitor()
-        typer.echo("Starting real-time monitoring dashboard...")
+        logger.info("Starting real-time monitoring dashboard...")
         # This would start the monitoring dashboard
-        typer.echo("Monitoring dashboard started (placeholder)")
+        logger.info("Monitoring dashboard started (placeholder)")
     else:
-        typer.echo(f"Unknown real-time action: {action}")
+        logger.error(f"Unknown real-time action: {action}")
 
 
 @app.command()
@@ -559,17 +563,17 @@ def anonymize(
     anonymizer = DataAnonymizer()
     cols_to_anon = [c.strip() for c in columns.split(",") if c.strip()]
 
-    typer.echo(f"Anonymizing data in {indir} and saving to {outdir}...")
+    logger.info(f"Anonymizing data in {indir} and saving to {outdir}...")
 
     try:
         for sample_id, events_file in list_stage_events(indir).items():
             df = load_dataframe(indir / events_file)
             anonymized_df = anonymizer.anonymize_dataframe(df, cols_to_anon, identifier_col)
             save_dataframe(anonymized_df, outdir / Path(events_file).name)
-            typer.echo(f"✅ Anonymized {sample_id}")
-        typer.echo("🎉 All specified dataframes anonymized successfully!")
+            logger.info(f"✅ Anonymized {sample_id}")
+        logger.info("🎉 All specified dataframes anonymized successfully!")
     except Exception as e:
-        typer.echo(f"❌ Error during anonymization: {e}")
+        logger.error(f"❌ Error during anonymization: {e}")
         raise typer.Exit(code=1)
 
 @app.command()
@@ -582,15 +586,15 @@ def encrypt(
     try:
         encryptor = DataEncryptor(key_path=key_path)
         encryptor.encrypt_file(infile, outfile)
-        typer.echo(f"✅ File '{infile}' encrypted to '{outfile}' successfully!")
+        logger.info(f"✅ File '{infile}' encrypted to '{outfile}' successfully!")
     except SecurityError as e:
-        typer.echo(f"❌ Encryption Error: {e}")
+        logger.error(f"❌ Encryption Error: {e}")
         raise typer.Exit(code=1)
     except FileNotFoundError as e:
-        typer.echo(f"❌ Error: {e}")
+        logger.error(f"❌ Error: {e}")
         raise typer.Exit(code=1)
     except Exception as e:
-        typer.echo(f"❌ An unexpected error occurred during encryption: {e}")
+        logger.error(f"❌ An unexpected error occurred during encryption: {e}")
         raise typer.Exit(code=1)
 
 @app.command()
@@ -603,15 +607,15 @@ def decrypt(
     try:
         encryptor = DataEncryptor(key_path=key_path)
         encryptor.decrypt_file(infile, outfile)
-        typer.echo(f"✅ File '{infile}' decrypted to '{outfile}' successfully!")
+        logger.info(f"✅ File '{infile}' decrypted to '{outfile}' successfully!")
     except SecurityError as e:
-        typer.echo(f"❌ Decryption Error: {e}")
+        logger.error(f"❌ Decryption Error: {e}")
         raise typer.Exit(code=1)
     except FileNotFoundError as e:
-        typer.echo(f"❌ Error: {e}")
+        logger.error(f"❌ Error: {e}")
         raise typer.Exit(code=1)
     except Exception as e:
-        typer.echo(f"❌ An unexpected error occurred during decryption: {e}")
+        logger.error(f"❌ An unexpected error occurred during decryption: {e}")
         raise typer.Exit(code=1)
 
 @app.command()
@@ -625,11 +629,11 @@ def rbac(
     rbac_manager = RBACManager(policy_file=policy_file)
     user_roles = [r.strip() for r in roles.split(",") if r.strip()]
 
-    typer.echo(f"Checking if roles {user_roles} can '{action}' resource '{resource}'...")
+    logger.info(f"Checking if roles {user_roles} can '{action}' resource '{resource}'...")
     if rbac_manager.check_permission(user_roles, action, resource):
-        typer.echo(f"✅ Permission granted for roles {user_roles} to {action} {resource}.")
+        logger.info(f"✅ Permission granted for roles {user_roles} to {action} {resource}.")
     else:
-        typer.echo(f"❌ Permission denied for roles {user_roles} to {action} {resource}.")
+        logger.error(f"❌ Permission denied for roles {user_roles} to {action} {resource}.")
         raise typer.Exit(code=1)
 
 @app.command(name="data-source")
@@ -651,45 +655,45 @@ def data_source_cmd(
         connector = get_connector(uri, connector_config)
 
         if action == "list":
-            typer.echo(f"Listing files in '{uri}' with pattern '{pattern}':")
+            logger.info(f"Listing files in '{uri}' with pattern '{pattern}':")
             found_files = list(connector.list_files(uri, pattern))
             if found_files:
                 for f in found_files:
-                    typer.echo(f"  - {f}")
+                    logger.info(f"  - {f}")
             else:
-                typer.echo("No files found.")
+                logger.info("No files found.")
         elif action == "configure":
-            typer.echo(f"Configured data source for URI: {uri}")
+            logger.info(f"Configured data source for URI: {uri}")
             if connector_config:
-                typer.echo(f"  with configuration: {json.dumps(connector_config, indent=2)}")
+                logger.info(f"  with configuration: {json.dumps(connector_config, indent=2)}")
             else:
-                typer.echo("  (using default configuration)")
+                logger.info("  (using default configuration)")
         elif action == "ingest":
             if not output_dir:
-                typer.echo("Error: --output-dir is required for ingest action.")
+                logger.error("Error: --output-dir is required for ingest action.")
                 raise typer.Exit(1)
             ensure_dir(output_dir)
 
-            typer.echo(f"Ingesting files from '{uri}' (pattern: '{pattern}') to '{output_dir}'...")
+            logger.info(f"Ingesting files from '{uri}' (pattern: '{pattern}') to '{output_dir}'...")
             ingested_count = 0
             for remote_file_uri in connector.list_files(uri, pattern):
                 local_file_path = output_dir / Path(remote_file_uri).name
                 try:
                     file_content = connector.read_file(remote_file_uri)
                     local_file_path.write_bytes(file_content)
-                    typer.echo(f"  ✅ Ingested {remote_file_uri} to {local_file_path}")
+                    logger.info(f"  ✅ Ingested {remote_file_uri} to {local_file_path}")
                     ingested_count += 1
                 except Exception as e:
-                    typer.echo(f"  ❌ Failed to ingest {remote_file_uri}: {e}")
-            typer.echo(f"🎉 Ingestion complete: {ingested_count} files successfully ingested.")
+                    logger.error(f"  ❌ Failed to ingest {remote_file_uri}: {e}")
+            logger.info(f"🎉 Ingestion complete: {ingested_count} files successfully ingested.")
         else:
-            typer.echo(f"Unknown action: {action}. Available actions: configure, list, ingest")
+            logger.error(f"Unknown action: {action}. Available actions: configure, list, ingest")
             raise typer.Exit(1)
     except (ValueError, ImportError, DataSourceError) as e:
-        typer.echo(f"❌ Data Source Error: {e}")
+        logger.error(f"❌ Data Source Error: {e}")
         raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"❌ An unexpected error occurred with data source: {e}")
+        logger.error(f"❌ An unexpected error occurred with data source: {e}")
         raise typer.Exit(1)
 
 
@@ -701,44 +705,54 @@ def run(
     spill: Path | None = typer.Option(None, "--spill"),
     batch: str = typer.Option("batch", "--batch"),
 ) -> None:
-    cfg = load_config(config)
-    root = ensure_dir(out)
-    ingest_dir = root / "ingest"
-    compensate_dir = root / "compensate"
-    qc_dir = root / "qc"
-    gate_dir = root / "gate"
-    drift_dir = root / "drift"
-    stats_dir = root / "stats"
+    setup_logging(out)
+    try:
+        cfg = load_and_validate_config(config)
+    except (ValueError, FileNotFoundError) as e:
+        logger.error(f"Error loading configuration: {e}", exc_info=True)
+        raise typer.Exit(code=1)
+    
+    try:
+        root = ensure_dir(out)
+        ingest_dir = root / "ingest"
+        compensate_dir = root / "compensate"
+        qc_dir = root / "qc"
+        gate_dir = root / "gate"
+        drift_dir = root / "drift"
+        stats_dir = root / "stats"
 
-    stage_ingest(samplesheet, ingest_dir, cfg)
-    stage_compensate(ingest_dir, compensate_dir, spill)
-    stage_qc(compensate_dir, qc_dir, cfg.get("qc", {}))
-    stage_gate(qc_dir, gate_dir, "default", cfg)
-    stage_drift(gate_dir, drift_dir, batch, cfg)
-    markers = _resolve_marker_columns(None, cfg)
-    stage_stats(gate_dir, stats_dir, "condition", markers)
+        stage_ingest(samplesheet, ingest_dir, cfg)
+        stage_compensate(ingest_dir, compensate_dir, spill)
+        stage_qc(compensate_dir, qc_dir, cfg.qc)
+        stage_gate(qc_dir, gate_dir, "default", cfg)
+        stage_drift(gate_dir, drift_dir, batch, cfg)
+        markers = _resolve_marker_columns(None, cfg)
+        stage_stats(gate_dir, stats_dir, "condition", markers)
 
-    report_path = root / "report.html"
-    build_report(str(root), str(cfg.get("report_template", Path("configs/report_template.html.j2"))), str(report_path))
-    typer.echo(f"Report available at {report_path}")
-
+        report_path = root / "report.html"
+        template_path = cfg.report.figure_format
+        build_report(str(root), str(template_path), str(report_path))
+        logger.info(f"Report available at {report_path}")
+    except CytoflowQCError as e:
+        logger.error(f"A pipeline error occurred: {e}", exc_info=True)
+        raise typer.Exit(code=1)
 
 # ---------------------------------------------------------------------------
 # Stage implementations (shared by commands and run())
 
 
-def stage_ingest(samplesheet: Path, out_dir: Path, config: dict[str, object]) -> None:
+def stage_ingest(samplesheet: Path, out_dir: Path, config: AppConfig) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
 
     sheet = load_samplesheet(str(samplesheet))
-    channel_map = config.get("channels", {}) if isinstance(config, dict) else {}
+    channel_map = config.channels.dict()
 
     records = []
     for row in sheet.to_dict(orient="records"):
         if row.get("missing_file"):
-            typer.echo(f"Skipping missing file {row['file_path']}")
+            logger.warning(f"Skipping missing file {row['file_path']}")
             continue
         events, metadata = read_fcs(row["file_path"])
         if channel_map:
@@ -787,7 +801,7 @@ def stage_compensate(indir: Path, out_dir: Path, spill: Path | None) -> None:
     write_manifest(out_manifest, out_dir / "manifest.csv")
 
 
-def stage_qc(indir: Path, out_dir: Path, qc_config: dict[str, dict[str, float]]) -> None:
+def stage_qc(indir: Path, out_dir: Path, qc_config: "QCConfig") -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
@@ -798,7 +812,7 @@ def stage_qc(indir: Path, out_dir: Path, qc_config: dict[str, dict[str, float]])
 
     for record in manifest.to_dict(orient="records"):
         df = load_dataframe(indir / record["events_file"])
-        qc_df = add_qc_flags(df, qc_config)
+        qc_df = add_qc_flags(df, qc_config.dict())
         sample_id = record["sample_id"]
         save_dataframe(qc_df, events_dir / f"{sample_id}.parquet")
         _write_json(meta_dir / f"{sample_id}.json", _read_json(indir / record["metadata_file"]))
@@ -818,15 +832,14 @@ def stage_qc(indir: Path, out_dir: Path, qc_config: dict[str, dict[str, float]])
     plot_qc_summary(summary, str(out_dir / "figures" / "qc_pass.png"))
 
 
-def stage_gate(indir: Path, out_dir: Path, strategy: str, config: dict[str, object]) -> None:
+def stage_gate(indir: Path, out_dir: Path, strategy: str, config: AppConfig) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     params_dir = ensure_dir(out_dir / "params")
     manifest = read_manifest(indir / "manifest.csv")
 
-    channel_config = config.get("channels", {}) if isinstance(config, dict) else {}
-    gate_config = dict(config.get("gating", {})) if isinstance(config, dict) else {}
-    gate_config["channels"] = channel_config
+    gate_config = config.gating.dict()
+    gate_config["channels"] = config.channels.dict()
     channels = gate_config.get("channels", {})
 
     summary_rows = []
@@ -862,7 +875,7 @@ def stage_gate(indir: Path, out_dir: Path, strategy: str, config: dict[str, obje
     write_manifest(manifest_out, out_dir / "manifest.csv")
 
 
-def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: dict[str, object]) -> None:
+def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: AppConfig) -> None:
     ensure_dir(out_dir)
     figures_dir = ensure_dir(out_dir / "figures")
     manifest = read_manifest(indir / "manifest.csv")
@@ -871,7 +884,7 @@ def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: dict[str, ob
     if "condition" in manifest.columns:
         meta_cols.append("condition")
     metadata = manifest[meta_cols].drop_duplicates()
-    marker_channels = config.get("channels", {}).get("markers") if isinstance(config, dict) else None
+    marker_channels = config.channels.markers
     if isinstance(marker_channels, list):
         markers = marker_channels
     else:
@@ -928,10 +941,10 @@ def _read_json(path: Path) -> dict[str, object]:
         return json.load(handle)
 
 
-def _resolve_marker_columns(values: str | None, cfg: dict[str, object]) -> Iterable[str]:
+def _resolve_marker_columns(values: str | None, cfg: AppConfig) -> Iterable[str]:
     if values:
         return [v.strip() for v in values.split(",") if v.strip()]
-    markers = cfg.get("channels", {}).get("markers") if isinstance(cfg, dict) else None
+    markers = cfg.channels.markers
     if isinstance(markers, list) and markers:
         return markers
     raise typer.BadParameter("No marker columns provided via --values or config channels.markers")
