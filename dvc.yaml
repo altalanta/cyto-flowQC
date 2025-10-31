@@ -1,0 +1,107 @@
+stages:
+  ingest:
+    cmd: >
+      poetry run cytoflow-qc ingest
+      samplesheets/example_samplesheet.csv
+      results/ingest
+      --config configs/example_config.yaml
+    deps:
+      - samplesheets/example_samplesheet.csv
+      - configs/example_config.yaml
+      - src/cytoflow_qc
+    outs:
+      - results/ingest
+
+  compensate:
+    cmd: >
+      poetry run cytoflow-qc compensate
+      results/ingest
+      results/compensate
+      --spill ${params.spill}
+      -w ${params.workers}
+    deps:
+      - results/ingest
+      - src/cytoflow_qc
+    params:
+      - spill
+      - workers
+    outs:
+      - results/compensate
+
+  qc:
+    cmd: >
+      poetry run cytoflow-qc qc
+      results/compensate
+      results/qc
+      --config configs/example_config.yaml
+      -w ${params.workers}
+    deps:
+      - results/compensate
+      - configs/example_config.yaml
+      - src/cytoflow_qc
+    params:
+      - workers
+    outs:
+      - results/qc
+
+  gate:
+    cmd: >
+      poetry run cytoflow-qc gate
+      results/qc
+      results/gate
+      --strategy ${params.strategy}
+      --config configs/example_config.yaml
+      -w ${params.workers}
+    deps:
+      - results/qc
+      - configs/example_config.yaml
+      - src/cytoflow_qc
+    params:
+      - strategy
+      - workers
+    outs:
+      - results/gate
+
+  drift:
+    cmd: >
+      poetry run cytoflow-qc drift
+      results/gate
+      results/drift
+      --by ${params.batch_col}
+      --config configs/example_config.yaml
+    deps:
+      - results/gate
+      - configs/example_config.yaml
+      - src/cytoflow_qc
+    params:
+      - batch_col
+    outs:
+      - results/drift
+
+  stats:
+    cmd: >
+      poetry run cytoflow-qc stats
+      results/gate
+      results/stats
+      --groups ${params.group_col}
+      --config configs/example_config.yaml
+    deps:
+      - results/gate
+      - configs/example_config.yaml
+      - src/cytoflow_qc
+    params:
+      - group_col
+    outs:
+      - results/stats
+
+  report:
+    cmd: >
+      poetry run cytoflow-qc report
+      results
+      results/report.html
+    deps:
+      - results/drift
+      - results/stats
+      - src/cytoflow_qc
+    outs:
+      - results/report.html
