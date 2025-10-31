@@ -42,6 +42,31 @@ docker run --rm -v $(pwd):/workspace cytoflow-qc cytoflow-qc --help
    cytoflow-qc dashboard --indir results/
    ```
 
+## Reproducibility with DVC
+
+This project uses [DVC](https://dvc.org) to version data and create a reproducible pipeline. To use it:
+
+1.  **Install DVC:** If you haven't already, install DVC with the necessary cloud provider support:
+    ```bash
+    pip install "dvc[s3,gcs]"
+    ```
+2.  **Configure a remote:** Set up a remote storage location for your data (e.g., S3, GCS, or a local directory).
+    ```bash
+    dvc remote add -d myremote s3://my-bucket/cytoflow-qc
+    ```
+3.  **Retrieve data:** Pull the versioned data from the remote storage.
+    ```bash
+    dvc pull
+    ```
+4.  **Reproduce the pipeline:** Run the full pipeline as defined in `dvc.yaml`.
+    ```bash
+    dvc repro
+    ```
+5.  **Push new data:** If you update the data or results, push them to the remote.
+    ```bash
+    dvc push
+    ```
+
 Reusable Make targets:
 
 - `make setup` – create the poetry env and install pre-commit hooks.

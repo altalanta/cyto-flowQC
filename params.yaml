@@ -1,0 +1,5 @@
+workers: 4
+batch_col: batch
+group_col: condition
+spill: null
+strategy: default

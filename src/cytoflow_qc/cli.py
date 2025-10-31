@@ -169,6 +169,9 @@ from typing import Iterable, Optional, Any
 
 import pandas as pd
 import typer
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
+import matplotlib.pyplot as plt
 
 from cytoflow_qc import __version__
 from cytoflow_qc.compensate import apply_compensation, get_spillover
@@ -233,8 +236,9 @@ def compensate(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
     spill: Path | None = typer.Option(None, "--spill", help="Override spillover CSV"),
+    workers: int = typer.Option(os.cpu_count(), "--workers", "-w", help="Number of worker processes to use."),
 ) -> None:
-    stage_compensate(indir, out, spill)
+    stage_compensate(indir, out, spill, workers)
     logger.info(f"Compensated events -> {out}")
 
 
@@ -243,9 +247,10 @@ def qc(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
     config: Path | None = typer.Option(None, "--config", "-c"),
+    workers: int = typer.Option(os.cpu_count(), "--workers", "-w", help="Number of worker processes to use."),
 ) -> None:
     cfg = load_and_validate_config(config) if config else AppConfig()
-    stage_qc(indir, out, cfg.qc)
+    stage_qc(indir, out, cfg.qc, workers)
     logger.info(f"QC annotations -> {out}")
 
 
@@ -255,9 +260,10 @@ def gate(
     out: Path = typer.Argument(...),
     strategy: str = typer.Option("default", "--strategy"),
     config: Path | None = typer.Option(None, "--config", "-c"),
+    workers: int = typer.Option(os.cpu_count(), "--workers", "-w", help="Number of worker processes to use."),
 ) -> None:
     cfg = load_and_validate_config(config) if config else AppConfig()
-    stage_gate(indir, out, strategy, cfg)
+    stage_gate(indir, out, strategy, cfg, workers)
     logger.info(f"Gated populations -> {out}")
 
 
@@ -703,7 +709,13 @@ def run(
     config: Path = typer.Option(..., "--config", exists=True),
     out: Path = typer.Option(..., "--out"),
     spill: Path | None = typer.Option(None, "--spill"),
-    batch: str = typer.Option("batch", "--batch"),
+    batch: str = typer.Option(..., "--batch"),
+    workers: int = typer.Option(
+        os.cpu_count(), 
+        "--workers", 
+        "-w", 
+        help="Number of worker processes to use."
+    ),
 ) -> None:
     setup_logging(out)
     try:
@@ -722,9 +734,9 @@ def run(
         stats_dir = root / "stats"
 
         stage_ingest(samplesheet, ingest_dir, cfg)
-        stage_compensate(ingest_dir, compensate_dir, spill)
-        stage_qc(compensate_dir, qc_dir, cfg.qc)
-        stage_gate(qc_dir, gate_dir, "default", cfg)
+        stage_compensate(ingest_dir, compensate_dir, spill, workers)
+        stage_qc(compensate_dir, qc_dir, cfg.qc, workers)
+        stage_gate(qc_dir, gate_dir, "default", cfg, workers)
         stage_drift(gate_dir, drift_dir, batch, cfg)
         markers = _resolve_marker_columns(None, cfg)
         stage_stats(gate_dir, stats_dir, "condition", markers)
@@ -772,28 +784,20 @@ def stage_ingest(samplesheet: Path, out_dir: Path, config: AppConfig) -> None:
     write_manifest(manifest, out_dir / "manifest.csv")
 
 
-def stage_compensate(indir: Path, out_dir: Path, spill: Path | None) -> None:
+def stage_compensate(indir: Path, out_dir: Path, spill: Path | None, workers: int) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
     manifest = read_manifest(indir / "manifest.csv")
 
     compensated_records = []
-    for record in manifest.to_dict(orient="records"):
-        events = load_dataframe(indir / record["events_file"])
-        metadata = _read_json(indir / record["metadata_file"])
-        matrix, channels = get_spillover(metadata, str(spill) if spill else None)
-        if matrix is not None and channels is not None:
-            events = apply_compensation(events, matrix, channels)
-            metadata["compensated"] = True
-        else:
-            metadata["compensated"] = False
-        sample_id = record["sample_id"]
-        save_dataframe(events, events_dir / f"{sample_id}.parquet")
-        _write_json(meta_dir / f"{sample_id}.json", metadata)
-        record["events_file"] = f"events/{sample_id}.parquet"
-        record["metadata_file"] = f"metadata/{sample_id}.json"
-        compensated_records.append(record)
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(_compensate_sample, record, indir, events_dir, meta_dir, spill): record
+            for record in manifest.to_dict(orient="records")
+        }
+        for future in as_completed(futures):
+            compensated_records.append(future.result())
 
     out_manifest = pd.DataFrame(compensated_records)
     out_manifest["stage"] = "compensate"
@@ -801,7 +805,7 @@ def stage_compensate(indir: Path, out_dir: Path, spill: Path | None) -> None:
     write_manifest(out_manifest, out_dir / "manifest.csv")
 
 
-def stage_qc(indir: Path, out_dir: Path, qc_config: "QCConfig") -> None:
+def stage_qc(indir: Path, out_dir: Path, qc_config: "QCConfig", workers: int) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     meta_dir = ensure_dir(out_dir / "metadata")
@@ -810,16 +814,15 @@ def stage_qc(indir: Path, out_dir: Path, qc_config: "QCConfig") -> None:
     sample_tables: dict[str, pd.DataFrame] = {}
     updated_records = []
 
-    for record in manifest.to_dict(orient="records"):
-        df = load_dataframe(indir / record["events_file"])
-        qc_df = add_qc_flags(df, qc_config.dict())
-        sample_id = record["sample_id"]
-        save_dataframe(qc_df, events_dir / f"{sample_id}.parquet")
-        _write_json(meta_dir / f"{sample_id}.json", _read_json(indir / record["metadata_file"]))
-        record["events_file"] = f"events/{sample_id}.parquet"
-        record["metadata_file"] = f"metadata/{sample_id}.json"
-        sample_tables[sample_id] = qc_df
-        updated_records.append(record)
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(_qc_sample, record, indir, events_dir, meta_dir, qc_config): record
+            for record in manifest.to_dict(orient="records")
+        }
+        for future in as_completed(futures):
+            updated_record, qc_df = future.result()
+            updated_records.append(updated_record)
+            sample_tables[updated_record["sample_id"]] = qc_df
 
     summary = qc_summary(sample_tables)
     summary.to_csv(out_dir / "summary.csv", index=False)
@@ -832,10 +835,11 @@ def stage_qc(indir: Path, out_dir: Path, qc_config: "QCConfig") -> None:
     plot_qc_summary(summary, str(out_dir / "figures" / "qc_pass.png"))
 
 
-def stage_gate(indir: Path, out_dir: Path, strategy: str, config: AppConfig) -> None:
+def stage_gate(indir: Path, out_dir: Path, strategy: str, config: AppConfig, workers: int) -> None:
     ensure_dir(out_dir)
     events_dir = ensure_dir(out_dir / "events")
     params_dir = ensure_dir(out_dir / "params")
+    figures_dir = ensure_dir(out_dir / "figures")
     manifest = read_manifest(indir / "manifest.csv")
 
     gate_config = config.gating.dict()
@@ -844,28 +848,26 @@ def stage_gate(indir: Path, out_dir: Path, strategy: str, config: AppConfig) -> 
 
     summary_rows = []
     updated_records = []
-    for record in manifest.to_dict(orient="records"):
-        sample_id = record["sample_id"]
-        df = load_dataframe(indir / record["events_file"])
-        gated, params = auto_gate(df, strategy=strategy, config=gate_config)
-        save_dataframe(gated, events_dir / f"{sample_id}.parquet")
-        _write_json(params_dir / f"{sample_id}.json", params)
-        record["events_file"] = f"events/{sample_id}.parquet"
-        record["params_file"] = f"params/{sample_id}.json"
-        summary_rows.append({
-            "sample_id": sample_id,
-            "input_events": len(df),
-            "gated_events": len(gated),
-        })
-
-        plot_gating_scatter(
-            df,
-            gated,
-            channels.get("fsc_a", "FSC-A"),
-            channels.get("ssc_a", "SSC-A"),
-            str(out_dir / "figures" / f"{sample_id}_gating.png"),
-        )
-        updated_records.append(record)
+    
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(
+                _gate_sample, 
+                record, 
+                indir, 
+                events_dir, 
+                params_dir, 
+                figures_dir, 
+                strategy, 
+                gate_config, 
+                channels
+            ): record
+            for record in manifest.to_dict(orient="records")
+        }
+        for future in as_completed(futures):
+            updated_record, summary_row = future.result()
+            updated_records.append(updated_record)
+            summary_rows.append(summary_row)
 
     pd.DataFrame(summary_rows).to_csv(out_dir / "summary.csv", index=False)
 
@@ -898,8 +900,10 @@ def stage_drift(indir: Path, out_dir: Path, batch_col: str, config: AppConfig) -
     if drift_res.get("umap") is not None:
         drift_res["umap"].to_csv(out_dir / "umap.csv", index=False)
 
-    plot_batch_drift_pca(drift_res["pca"], str(figures_dir / "pca.png"), batch_col)
-    plot_batch_drift_umap(drift_res.get("umap"), str(figures_dir / "umap.png"), batch_col)
+    fig1 = plot_batch_drift_pca(drift_res["pca"], str(figures_dir / "pca.png"), batch_col)
+    fig2 = plot_batch_drift_umap(drift_res.get("umap"), str(figures_dir / "umap.png"), batch_col)
+    plt.close(fig1)
+    plt.close(fig2)
 
 
 def stage_stats(indir: Path, out_dir: Path, group_col: str, value_cols: Iterable[str]) -> None:
@@ -923,7 +927,8 @@ def stage_stats(indir: Path, out_dir: Path, group_col: str, value_cols: Iterable
     else:
         effects = effect_sizes(aggregated, group_col, columns)
     effects.to_csv(out_dir / "effect_sizes.csv", index=False)
-    plot_effect_sizes(effects, str(out_dir / "figures" / "effect_sizes.png"))
+    fig = plot_effect_sizes(effects, str(out_dir / "figures" / "effect_sizes.png"))
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -948,3 +953,61 @@ def _resolve_marker_columns(values: str | None, cfg: AppConfig) -> Iterable[str]
     if isinstance(markers, list) and markers:
         return markers
     raise typer.BadParameter("No marker columns provided via --values or config channels.markers")
+
+# ---------------------------------------------------------------------------
+# Parallel processing worker functions
+
+def _compensate_sample(record, indir, events_dir, meta_dir, spill):
+    """Worker function to compensate a single sample."""
+    events = load_dataframe(indir / record["events_file"])
+    metadata = _read_json(indir / record["metadata_file"])
+    matrix, channels = get_spillover(metadata, str(spill) if spill else None)
+    if matrix is not None and channels is not None:
+        events = apply_compensation(events, matrix, channels)
+        metadata["compensated"] = True
+    else:
+        metadata["compensated"] = False
+    sample_id = record["sample_id"]
+    save_dataframe(events, events_dir / f"{sample_id}.parquet")
+    _write_json(meta_dir / f"{sample_id}.json", metadata)
+    record["events_file"] = f"events/{sample_id}.parquet"
+    record["metadata_file"] = f"metadata/{sample_id}.json"
+    return record
+
+def _qc_sample(record, indir, events_dir, meta_dir, qc_config):
+    """Worker function to QC a single sample."""
+    df = load_dataframe(indir / record["events_file"])
+    qc_df = add_qc_flags(df, qc_config.dict())
+    sample_id = record["sample_id"]
+    save_dataframe(qc_df, events_dir / f"{sample_id}.parquet")
+    _write_json(meta_dir / f"{sample_id}.json", _read_json(indir / record["metadata_file"]))
+    record["events_file"] = f"events/{sample_id}.parquet"
+    record["metadata_file"] = f"metadata/{sample_id}.json"
+    return record, qc_df
+
+def _gate_sample(record, indir, events_dir, params_dir, figures_dir, strategy, gate_config, channels):
+    """Worker function to gate a single sample."""
+    sample_id = record["sample_id"]
+    df = load_dataframe(indir / record["events_file"])
+    gated, params = auto_gate(df, strategy=strategy, config=gate_config)
+    save_dataframe(gated, events_dir / f"{sample_id}.parquet")
+    _write_json(params_dir / f"{sample_id}.json", params)
+    record["events_file"] = f"events/{sample_id}.parquet"
+    record["params_file"] = f"params/{sample_id}.json"
+    
+    summary_row = {
+        "sample_id": sample_id,
+        "input_events": len(df),
+        "gated_events": len(gated),
+    }
+
+    fig = plot_gating_scatter(
+        df,
+        gated,
+        channels.get("fsc_a", "FSC-A"),
+        channels.get("ssc_a", "SSC-A"),
+        str(figures_dir / f"{sample_id}_gating.png"),
+    )
+    plt.close(fig)
+    
+    return record, summary_row
