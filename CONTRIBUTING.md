@@ -46,6 +46,20 @@ We welcome contributions from the community! Whether you're fixing a bug, improv
 2.  Provide a clear title and description of your changes. If your PR addresses an existing issue, please reference it (e.g., `Closes #123`).
 3.  The maintainers will review your pull request. Please be responsive to any feedback or requested changes.
 
+## Visual Regression Testing
+
+We use `pytest-mpl` for visual regression testing of our plots. This ensures that visual outputs remain consistent.
+
+-   **Running the tests:**
+    ```bash
+    poetry run pytest tests/test_visuals.py
+    ```
+-   **Updating baseline images:** If you make intentional changes to a plot, the visual tests will fail. To update the baseline images, run:
+    ```bash
+    poetry run pytest tests/test_visuals.py --mpl-generate-path=tests/baseline
+    ```
+    Then, commit the new baseline images in the `tests/baseline` directory along with your code changes.
+
 ## Code Style
 
 - We use `black` for code formatting and `ruff` for linting. The pre-commit hooks will help enforce this, and you can run `make format` to apply the correct style.

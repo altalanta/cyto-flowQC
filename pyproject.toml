@@ -47,6 +47,8 @@ pre-commit = ">=3.0.0"
 mypy = ">=1.0.0"
 mkdocs = ">=1.4.0"
 mkdocs-material = ">=9.0.0"
+dvc = {extras = ["s3", "gcs"], version = ">=3.0.0"}
+pytest-mpl = ">=0.16.1"
 
 [tool.poetry.group.cloud.dependencies]
 boto3 = ">=1.28.0"
