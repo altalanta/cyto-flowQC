@@ -186,7 +186,7 @@ s3_uri_base = f"s3://{S3_BUCKET_NAME}/{S3_TEST_PREFIX}"
 
 try:
     s3_connector = get_connector(s3_uri_base)
-    
+
     # Example: Write a DataFrame to S3
     df_to_s3 = pd.DataFrame({"col_a": [1, 2], "col_b": ["X", "Y"]})
     s3_output_key = f"{S3_TEST_PREFIX}output.parquet"
@@ -328,4 +328,3 @@ The current data connector framework lays the groundwork for a more comprehensiv
 *   **Data Quality Monitoring**: Tools to monitor data quality metrics as data flows through the ETL process.
 
 These planned features will further streamline the data preparation phase, ensuring high-quality and consistent data for downstream analysis in CytoFlow-QC.
-

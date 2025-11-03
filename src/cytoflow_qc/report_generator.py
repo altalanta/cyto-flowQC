@@ -900,12 +900,3 @@ if __name__ == "__main__":
         print(f"Error generating report: {e}")
         sys.exit(1)
 
-
-
-
-
-
-
-
-
-

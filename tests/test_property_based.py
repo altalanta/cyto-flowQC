@@ -209,14 +209,3 @@ class TestDataGenerationStrategies:
             "condition": draw(st.sampled_from(["control", "treatment", "vehicle"])),
             "timepoint": draw(st.sampled_from(["T0", "T24", "T48", "T72"])),
         }
-
-
-
-
-
-
-
-
-
-
-

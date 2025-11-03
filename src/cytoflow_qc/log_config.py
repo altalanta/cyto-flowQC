@@ -16,7 +16,7 @@ def setup_logging(log_dir: Path, log_level: str = "INFO"):
     # Root logger configuration
     logger = logging.getLogger("cytoflow_qc")
     logger.setLevel(numeric_level)
-    
+
     # Avoid duplicate handlers if called multiple times
     if logger.hasHandlers():
         logger.handlers.clear()
@@ -36,7 +36,7 @@ def setup_logging(log_dir: Path, log_level: str = "INFO"):
     )
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
-    
+
     # Redirect uncaught exceptions to the logger
     def handle_exception(exc_type, exc_value, exc_traceback):
         if issubclass(exc_type, KeyboardInterrupt):
@@ -45,5 +45,4 @@ def setup_logging(log_dir: Path, log_level: str = "INFO"):
         logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
     sys.excepthook = handle_exception
-
 
