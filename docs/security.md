@@ -95,7 +95,7 @@ import os
 
 # Generate a key if not available (or load from file/env var)
 # If key_path is not provided and env var not set, it will print the key to console.
-encryptor = DataEncryptor(key_path=Path("encryption.key")) 
+encryptor = DataEncryptor(key_path=Path("encryption.key"))
 
 # Encrypt data
 sensitive_bytes = b"This is some highly confidential data."
@@ -202,6 +202,7 @@ try:
 except SecurityError as e:
     print(f"Access denied: {e}")
 ```
+
 
 
 

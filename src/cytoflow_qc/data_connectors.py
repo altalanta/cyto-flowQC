@@ -300,20 +300,20 @@ if __name__ == "__main__":
     #     bucket_name = "your-s3-bucket"
     #     test_s3_key = "test_cytoflow_qc/test_file.txt"
     #     test_s3_uri = f"s3://{bucket_name}/{test_s3_key}"
-    # 
+    #
     #     # Write a file
     #     s3_connector.write_file(test_s3_uri, b"Hello from S3!")
     #     print(f"Wrote to {test_s3_uri}")
-    # 
+    #
     #     # Read a file
     #     read_content = s3_connector.read_file(test_s3_uri)
     #     print(f"Read from S3: {read_content.decode()}")
-    # 
+    #
     #     # List files
     #     print(f"Files in s3://{bucket_name}/test_cytoflow_qc/")
     #     for f in s3_connector.list_files(f"s3://{bucket_name}/test_cytoflow_qc/", pattern="*.txt"):
     #         print(f"  {f}")
-    # 
+    #
     #     # Clean up
     #     s3_connector.s3_client.delete_object(Bucket=bucket_name, Key=test_s3_key)
     #     print(f"Cleaned up {test_s3_uri}")
@@ -321,7 +321,7 @@ if __name__ == "__main__":
     #     print("Skipping S3 example: boto3 not installed.")
     # except ClientError as e:
     #     print(f"Skipping S3 example due to AWS error: {e}")
-    # 
+    #
     print("\n--- GCS Connector Example (requires Google Cloud credentials and a bucket) ---")
     # To run this, ensure you have Google Cloud credentials configured
     # (e.g., GOOGLE_APPLICATION_CREDENTIALS env var or gcloud auth application-default login)
@@ -331,20 +331,20 @@ if __name__ == "__main__":
     #     bucket_name = "your-gcs-bucket"
     #     test_gcs_key = "test_cytoflow_qc/test_file.txt"
     #     test_gcs_uri = f"gs://{bucket_name}/{test_gcs_key}"
-    # 
+    #
     #     # Write a file
     #     gcs_connector.write_file(test_gcs_uri, b"Hello from GCS!")
     #     print(f"Wrote to {test_gcs_uri}")
-    # 
+    #
     #     # Read a file
     #     read_content = gcs_connector.read_file(test_gcs_uri)
     #     print(f"Read from GCS: {read_content.decode()}")
-    # 
+    #
     #     # List files
     #     print(f"Files in gs://{bucket_name}/test_cytoflow_qc/")
     #     for f in gcs_connector.list_files(f"gs://{bucket_name}/test_cytoflow_qc/", pattern="*.txt"):
     #         print(f"  {f}")
-    # 
+    #
     #     # Clean up
     #     blob = gcs_connector.gcs_client.get_bucket(bucket_name).blob(test_gcs_key)
     #     blob.delete()
@@ -353,6 +353,7 @@ if __name__ == "__main__":
     #     print("Skipping GCS example: google-cloud-storage not installed.")
     # except Exception as e:
     #     print(f"Skipping GCS example due to Google Cloud error: {e}")
+
 
 
 

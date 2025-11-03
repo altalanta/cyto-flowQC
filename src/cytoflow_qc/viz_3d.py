@@ -745,9 +745,3 @@ if __name__ == "__main__":
         df, "FSC-A", "SSC-A", "CD3-A",
         output_file, format_type, dpi=300, figsize=(12, 10)
     )
-
-
-
-
-
-

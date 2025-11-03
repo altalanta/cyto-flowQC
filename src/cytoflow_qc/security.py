@@ -84,7 +84,7 @@ class DataAnonymizer:
 
             if identifier_col and identifier_col in df_anonymized.columns:
                 # Use identifier for stable mapping
-                self.mapping[col] = { original: self._anonymize_value(col, original) 
+                self.mapping[col] = { original: self._anonymize_value(col, original)
                                     for original in df_anonymized[col].unique() }
                 df_anonymized[col] = df_anonymized[col].map(self.mapping[col])
             else:
@@ -368,12 +368,4 @@ if __name__ == "__main__":
         illegal_config_update()
     except SecurityError as e:
         print(e)
-
-
-
-
-
-
-
-
 

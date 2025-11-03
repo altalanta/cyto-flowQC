@@ -172,11 +172,3 @@ class TestRBACManager:
         with pytest.raises(SecurityError, match="Permission denied"):
             mock_func()
 
-
-
-
-
-
-
-
-

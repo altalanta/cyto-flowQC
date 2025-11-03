@@ -17,8 +17,3 @@ __all__ = [
     "PluginRegistry",
     "get_plugin_registry",
 ]
-
-
-
-
-

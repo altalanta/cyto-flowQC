@@ -10,6 +10,7 @@ import pandas as pd
 from scipy.stats import gaussian_kde
 
 from cytoflow_qc.exceptions import GatingError
+from cytoflow_qc.plugins.registry import get_plugin_registry
 
 
 @dataclass
@@ -39,8 +40,14 @@ def auto_gate(
 
     if strategy == "default":
         return _default_gating_strategy(df_clean, config)
-    else:
-        raise GatingError(f"Unsupported gating strategy: {strategy}")
+    
+    # Try to load a plugin for the given strategy
+    try:
+        registry = get_plugin_registry()
+        gating_plugin = registry.load_plugin("gating", strategy, config)
+        return gating_plugin.gate(df_clean)
+    except Exception as e:
+        raise GatingError(f"Failed to load or execute gating strategy '{strategy}': {e}") from e
 
 
 def _default_gating_strategy(
@@ -57,19 +64,19 @@ def _default_gating_strategy(
     # Density-based gating for lymphocytes
     gate_params = config.get("lymphocytes", {})
     percentile = gate_params.get("percentile", 90)
-    
+
     # Subset to avoid memory issues with KDE on large data
     sample_df = df if len(df) < 50000 else df.sample(n=50000)
-    
+
     kde = gaussian_kde(sample_df[[fsc_col, ssc_col]].T)
     density = kde(df[[fsc_col, ssc_col]].T)
     density_threshold = np.percentile(density, 100 - percentile)
-    
+
     df["gate_lymphocyte"] = density > density_threshold
-    
+
     gated_df = df[df["gate_lymphocyte"]].copy()
     params = {"lymphocyte_density_threshold": density_threshold}
-    
+
     return gated_df, params
 
 

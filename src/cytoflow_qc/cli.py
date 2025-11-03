@@ -304,6 +304,24 @@ def report(
 
 
 @app.command()
+def launch():
+    """Launch the interactive pipeline launcher GUI."""
+    try:
+        import streamlit.web.cli as stcli
+        import sys
+
+        launcher_path = Path(__file__).parent / "launcher.py"
+        sys.argv = ["streamlit", "run", str(launcher_path)]
+        stcli.main()
+    except ImportError:
+        logger.error("Streamlit is not installed. Please run 'pip install streamlit'.")
+        raise typer.Exit(1)
+    except Exception as e:
+        logger.error(f"Failed to launch GUI: {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
 def dashboard(
     indir: Path = typer.Argument(..., exists=True, help="Results directory from cytoflow-qc run"),
     sample: str | None = typer.Option(None, "--sample", "-s", help="Specific sample to visualize"),
@@ -711,9 +729,9 @@ def run(
     spill: Path | None = typer.Option(None, "--spill"),
     batch: str = typer.Option(..., "--batch"),
     workers: int = typer.Option(
-        os.cpu_count(), 
-        "--workers", 
-        "-w", 
+        os.cpu_count(),
+        "--workers",
+        "-w",
         help="Number of worker processes to use."
     ),
 ) -> None:
@@ -723,7 +741,7 @@ def run(
     except (ValueError, FileNotFoundError) as e:
         logger.error(f"Error loading configuration: {e}", exc_info=True)
         raise typer.Exit(code=1)
-    
+
     try:
         root = ensure_dir(out)
         ingest_dir = root / "ingest"
@@ -848,18 +866,18 @@ def stage_gate(indir: Path, out_dir: Path, strategy: str, config: AppConfig, wor
 
     summary_rows = []
     updated_records = []
-    
+
     with ProcessPoolExecutor(max_workers=workers) as executor:
         futures = {
             executor.submit(
-                _gate_sample, 
-                record, 
-                indir, 
-                events_dir, 
-                params_dir, 
-                figures_dir, 
-                strategy, 
-                gate_config, 
+                _gate_sample,
+                record,
+                indir,
+                events_dir,
+                params_dir,
+                figures_dir,
+                strategy,
+                gate_config,
                 channels
             ): record
             for record in manifest.to_dict(orient="records")
@@ -994,7 +1012,7 @@ def _gate_sample(record, indir, events_dir, params_dir, figures_dir, strategy, g
     _write_json(params_dir / f"{sample_id}.json", params)
     record["events_file"] = f"events/{sample_id}.parquet"
     record["params_file"] = f"params/{sample_id}.json"
-    
+
     summary_row = {
         "sample_id": sample_id,
         "input_events": len(df),
@@ -1009,5 +1027,5 @@ def _gate_sample(record, indir, events_dir, params_dir, figures_dir, strategy, g
         str(figures_dir / f"{sample_id}_gating.png"),
     )
     plt.close(fig)
-    
+
     return record, summary_row

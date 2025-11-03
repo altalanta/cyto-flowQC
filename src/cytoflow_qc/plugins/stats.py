@@ -165,19 +165,3 @@ class StatsMethodResult:
             f"shape={self.stats_data.shape})"
         )
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,339 +1,81 @@
-# CytoFlow-QC Plugin Development Guide
+# Extending CytoFlow-QC with Plugins
 
-This guide explains how to develop custom plugins for cytoflow-qc to extend its functionality with custom gating strategies, quality control methods, and statistical analysis techniques.
+CytoFlow-QC is designed to be extensible through a powerful and flexible plugin system. You can create your own custom components for various stages of the analysis pipeline, such as gating strategies, quality control methods, and statistical analyses.
 
-## Overview
+## How Plugins Work
 
-CytoFlow-QC uses a plugin architecture that allows you to:
+The plugin system is built on Python's standard `entry_points` mechanism. This allows you to develop your plugin as a completely separate, installable Python package. When your package is installed in the same environment as `cytoFlow-qc`, it automatically discovers and integrates your custom components.
 
-- **Custom Gating Strategies**: Implement specialized gating algorithms for specific cell types or experimental conditions
-- **Advanced QC Methods**: Create sophisticated quality control algorithms beyond the built-in methods
-- **Statistical Analysis**: Add new statistical tests and effect size calculations
-- **Data Processing**: Extend the pipeline with custom data transformations
+## Creating a Gating Strategy Plugin
 
-## Plugin Types
+Here's a step-by-step guide to creating a custom gating strategy plugin.
 
-### 1. Gating Strategy Plugins
-Implement custom gating algorithms for identifying cell populations.
+### 1. Set Up Your Project Structure
 
-### 2. Quality Control Plugins
-Create specialized quality control methods for detecting problematic samples.
+Create a new directory for your plugin. The structure should look something like this:
 
-### 3. Statistical Method Plugins
-Add new statistical analysis techniques and effect size calculations.
+```
+cytoflow-qc-my-gating/
+├── pyproject.toml
+├── README.md
+└── src/
+    └── my_gating_strategy/
+        ├── __init__.py
+        └── gating.py
+```
 
-## Getting Started
+### 2. Define the Plugin Class
 
-### 1. Create a Plugin Class
-
-All plugins inherit from base classes in the `cytoflow_qc.plugins` module:
+In `gating.py`, create a class that inherits from `GatingStrategyPlugin` and implements the required `gate` method.
 
 ```python
-from cytoflow_qc.plugins.gating import GatingStrategyPlugin
+# src/my_gating_strategy/gating.py
+from typing import Any, Dict, Tuple
+import pandas as pd
+from cytoflow_qc.plugins.base import GatingStrategyPlugin
 
-class MyCustomGating(GatingStrategyPlugin):
-    PLUGIN_NAME = "my_custom_gating"
-    PLUGIN_VERSION = "1.0.0"
-    PLUGIN_DESCRIPTION = "My custom gating strategy"
+class MyCustomGate(GatingStrategyPlugin):
+    """A brief description of your custom gate."""
 
-    def validate_gate_parameters(self, channels):
-        # Validate required channels and parameters
-        pass
+    def get_default_config(self) -> Dict[str, Any]:
+        """Define default parameters for your gate."""
+        return {"my_parameter": 1.0}
 
-    def apply_gate(self, data, channels, **kwargs):
-        # Implement your gating logic
-        return gated_data, gating_params
+    def gate(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, float]]:
+        """Implement your gating logic here."""
+        # Your gating logic goes here...
+        gated_df = df[df["FSC-A"] > self.config["my_parameter"]]
+        params = {"parameter_used": self.config["my_parameter"]}
+        return gated_df, params
 ```
 
-### 2. Define Plugin Metadata
+### 3. Register the Plugin with an Entry Point
 
-Set the required class attributes:
+In your `pyproject.toml` file, you need to register your new class as a plugin using a special entry point.
 
-```python
-PLUGIN_NAME = "my_plugin_name"           # Unique identifier
-PLUGIN_VERSION = "1.0.0"                 # Version string
-PLUGIN_DESCRIPTION = "Brief description" # Human-readable description
-PLUGIN_AUTHOR = "Your Name"              # Plugin author
-PLUGIN_EMAIL = "your.email@example.com"  # Contact information
-REQUIRES_CYTOFLOW_VERSION = ">=0.1.0"   # Version compatibility
+```toml
+# pyproject.toml
+[project.entry-points."cytoflow_qc.gating_strategies"]
+my-custom-gate = "my_gating_strategy.gating:MyCustomGate"
 ```
 
-### 3. Implement Required Methods
+-   `cytoflow_qc.gating_strategies` is the entry point group for gating plugins.
+-   `my-custom-gate` is the name you will use to refer to your strategy in the `cytoflow-qc` CLI (e.g., `--strategy my-custom-gate`).
+-   `my_gating_strategy.gating:MyCustomGate` is the import path to your plugin class.
 
-Each plugin type has specific abstract methods that must be implemented:
+### 4. Install and Use Your Plugin
 
-#### Gating Strategy Plugins
-- `validate_gate_parameters(channels)`: Validate required channels
-- `apply_gate(data, channels, **kwargs)`: Apply gating logic
-- `get_gate_description()`: Return human-readable description
-- `get_required_parameters()`: List required config parameters
-- `get_default_config()`: Default configuration values
-
-#### QC Method Plugins
-- `validate_qc_parameters(channels)`: Validate QC parameters
-- `apply_qc(data, channels, **kwargs)`: Apply QC method
-- `get_qc_description()`: Return description
-- `get_qc_metrics(qc_flags)`: Calculate QC metrics
-- `get_required_parameters()`: Required config parameters
-- `get_default_config()`: Default configuration
-
-#### Statistical Method Plugins
-- `validate_stats_parameters(data, group_col, value_cols)`: Validate parameters
-- `apply_stats(data, group_col, value_cols, **kwargs)`: Apply statistics
-- `get_stats_description()`: Return description
-- `get_stats_columns()`: List result columns
-- `get_required_parameters()`: Required config parameters
-- `get_default_config()`: Default configuration
-
-## Configuration Integration
-
-### Plugin Configuration
-
-Plugins are configured through the main cytoflow-qc configuration YAML file:
-
-```yaml
-plugins:
-  gating_strategy:
-    my_custom_gating:
-      parameter1: value1
-      parameter2: value2
-  qc_method:
-    my_custom_qc:
-      threshold: 0.05
-```
-
-### Configuration Validation
-
-Your plugin should validate its configuration:
-
-```python
-def _validate_config(self):
-    """Validate plugin configuration."""
-    required_params = self.get_required_parameters()
-    for param in required_params:
-        if param not in self.config:
-            raise ValueError(f"Required parameter '{param}' not found")
-
-    # Additional validation logic
-    threshold = self.config.get("threshold", 0.1)
-    if not 0 < threshold < 1:
-        raise ValueError("Threshold must be between 0 and 1")
-```
-
-## Error Handling
-
-### Plugin Errors
-
-Use the provided error classes for consistent error handling:
-
-```python
-from cytoflow_qc.plugins.base import PluginError, PluginLoadError, PluginVersionError
-
-def apply_gate(self, data, channels, **kwargs):
-    try:
-        # Your gating logic here
-        if some_condition_fails:
-            raise PluginError("Custom error message")
-    except Exception as e:
-        raise PluginError(f"Gating failed: {e}") from e
-```
-
-### Graceful Degradation
-
-Plugins should handle edge cases gracefully:
-
-```python
-def apply_gate(self, data, channels, **kwargs):
-    try:
-        # Try advanced method first
-        result = self._advanced_gating(data, channels)
-    except Exception:
-        # Fall back to simpler method
-        result = self._simple_gating(data, channels)
-
-    return result
-```
-
-## Examples
-
-### Example 1: Custom Gating Strategy
-
-See `src/cytoflow_qc/plugins/examples/custom_gating.py` for a complete example of a custom gating strategy that implements density-based filtering.
-
-### Example 2: Custom Statistical Method
-
-See `src/cytoflow_qc/plugins/examples/custom_stats.py` for an example of advanced statistical analysis with multiple effect size measures and bootstrap confidence intervals.
-
-### Example 3: Custom QC Method
-
-See `src/cytoflow_qc/plugins/examples/custom_qc.py` for an example of machine learning-based quality control.
-
-## Testing Your Plugin
-
-### Unit Testing
-
-Create comprehensive tests for your plugin:
-
-```python
-import pytest
-from cytoflow_qc.plugins.gating import GatingStrategyPlugin
-
-def test_my_plugin():
-    plugin = MyCustomGating({"param": "value"})
-
-    # Test configuration validation
-    with pytest.raises(ValueError):
-        plugin = MyCustomGating({})  # Missing required params
-
-    # Test gating functionality
-    test_data = create_test_data()
-    gated_data, params = plugin.apply_gate(test_data, {"fsc_a": "FSC-A"})
-
-    assert len(gated_data) <= len(test_data)
-    assert "method" in params
-```
-
-### Integration Testing
-
-Test your plugin with the full cytoflow-qc pipeline:
-
-```python
-def test_plugin_integration():
-    # Create test configuration with your plugin
-    config = {
-        "channels": {"fsc_a": "FSC-A", "ssc_a": "SSC-A"},
-        "plugins": {
-            "gating_strategy": {
-                "my_custom_gating": {"density_threshold": 0.1}
-            }
-        }
-    }
-
-    # Run pipeline with your plugin
-    # Verify results
-```
-
-## Best Practices
-
-### 1. Performance Considerations
-- **Memory efficiency**: Process data in chunks for large datasets
-- **Computational complexity**: Document expected performance characteristics
-- **Caching**: Cache expensive computations when appropriate
-
-### 2. Robustness
-- **Input validation**: Validate all inputs thoroughly
-- **Error handling**: Provide meaningful error messages
-- **Edge cases**: Handle empty data, single samples, etc.
-
-### 3. Documentation
-- **Comprehensive docstrings**: Document all methods and parameters
-- **Usage examples**: Provide clear examples of how to use your plugin
-- **Parameter descriptions**: Explain what each configuration parameter does
-
-### 4. Versioning
-- **Semantic versioning**: Follow semantic versioning for plugin releases
-- **Breaking changes**: Clearly document any breaking changes
-- **Deprecation warnings**: Use warnings for deprecated features
-
-## Deployment
-
-### Plugin Distribution
-
-1. **Package your plugin**: Create a Python package with your plugin
-2. **Include metadata**: Provide clear installation and usage instructions
-3. **Documentation**: Include comprehensive documentation
-
-### Installation
-
-Users can install your plugin and register it:
+To use your new plugin, install it in the same Python environment as `cytoflow-qc`:
 
 ```bash
-pip install my-cytoflow-plugin
-
-# Configure in YAML
-plugins:
-  gating_strategy:
-    my_custom_gating:
-      parameter1: value1
+pip install ./cytoflow-qc-my-gating
 ```
 
-### Discovery
+Once installed, `cytoflow-qc` will automatically discover your plugin, and you can use it in your pipeline:
 
-The plugin registry automatically discovers plugins in registered directories:
-
-```python
-from cytoflow_qc.plugins import get_plugin_registry
-
-registry = get_plugin_registry()
-registry.register_plugin_path("/path/to/my/plugins")
-
-# Discover available plugins
-plugins = registry.discover_plugins("gating_strategy")
+```bash
+cytoflow-qc gate --strategy my-custom-gate ...
 ```
 
-## Support and Community
-
-- **GitHub Issues**: Report bugs and request features
-- **Documentation**: Check plugin development documentation
-- **Examples**: Study existing plugin examples
-- **Community**: Share your plugins with the cytoflow-qc community
-
-## Advanced Topics
-
-### Custom Data Types
-
-If your plugin needs custom data structures:
-
-```python
-from dataclasses import dataclass
-
-@dataclass
-class CustomGateResult:
-    gated_data: pd.DataFrame
-    confidence_score: float
-    gate_boundaries: dict[str, tuple[float, float]]
-
-    def to_dict(self):
-        return {
-            "confidence": self.confidence_score,
-            "boundaries": self.gate_boundaries,
-        }
-```
-
-### Async Processing
-
-For computationally intensive plugins:
-
-```python
-import asyncio
-from typing import Awaitable
-
-class AsyncPlugin(GatingStrategyPlugin):
-    async def apply_gate_async(self, data, channels, **kwargs):
-        # Async implementation
-        pass
-```
-
-### Plugin Dependencies
-
-If your plugin requires additional dependencies:
-
-```python
-def get_plugin_dependencies(self):
-    """Return list of required dependencies."""
-    return ["scikit-learn", "scipy", "numpy"]
-```
-
-This plugin development guide should help you create robust, well-documented plugins that extend cytoflow-qc's capabilities while maintaining compatibility and following best practices.
-
-
-
-
-
-
-
-
-
-
-
+For a complete working example, see the `example_plugin` directory in the main `cytoflow-qc` repository.
 

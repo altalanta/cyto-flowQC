@@ -377,14 +377,3 @@ def monitored_pipeline(samplesheet, config, output_dir):
 ```
 
 This troubleshooting guide should help resolve most common issues with cytoflow-qc. For additional help, please consult the full documentation or open an issue on GitHub.
-
-
-
-
-
-
-
-
-
-
-
