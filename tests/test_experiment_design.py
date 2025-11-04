@@ -206,3 +206,4 @@ class TestCohortManager:
         details = cohort_manager.get_cohort_details("Batch_B1_B2")
         assert sorted(details["sample_ids"]) == sorted(["S1", "S2", "S3"])
 
+

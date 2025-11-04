@@ -35,3 +35,4 @@ class CustomDensityGating(GatingStrategyPlugin):
         params = {"custom_density_threshold": density_threshold}
         
         return gated_df, params
+

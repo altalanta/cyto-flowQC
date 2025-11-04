@@ -7,3 +7,4 @@ This is an example of a custom gating strategy plugin for the `cytoflow-qc` pack
 ```bash
 pip install .
 ```
+
