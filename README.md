@@ -42,6 +42,16 @@ docker run --rm -v $(pwd):/workspace cytoflow-qc cytoflow-qc --help
    cytoflow-qc dashboard --indir results/
    ```
 
+## Interactive Pipeline Launcher
+
+For a user-friendly graphical interface, you can use the interactive launcher:
+
+```bash
+cytoflow-qc launch
+```
+
+This will open a web application in your browser where you can upload your samplesheet and configuration files, adjust parameters, and run the pipeline with real-time log output.
+
 ## Reproducibility with DVC
 
 This project uses [DVC](https://dvc.org) to version data and create a reproducible pipeline. To use it:
