@@ -174,16 +174,18 @@ import os
 import matplotlib.pyplot as plt
 
 from cytoflow_qc import __version__
-from cytoflow_qc.compensate import apply_compensation, get_spillover
 from cytoflow_qc.config import AppConfig, load_and_validate_config
-from cytoflow_qc.drift import compute_batch_drift, extract_sample_features
 from cytoflow_qc.exceptions import CytoflowQCError
-from cytoflow_qc.gate import auto_gate
-from cytoflow_qc.io import load_samplesheet, read_fcs, standardize_channels
 from cytoflow_qc.log_config import setup_logging
-from cytoflow_qc.qc import add_qc_flags, qc_summary
+from cytoflow_qc.pipeline import (
+    CompensationStage, 
+    GatingStage, 
+    QCStage,
+    IngestionStage,
+    DriftStage,
+    StatsStage,
+)
 from cytoflow_qc.report import build_report
-from cytoflow_qc.stats import effect_sizes
 from cytoflow_qc.utils import (
     ensure_dir,
     list_stage_events,
@@ -741,24 +743,29 @@ def run(
     except (ValueError, FileNotFoundError) as e:
         logger.error(f"Error loading configuration: {e}", exc_info=True)
         raise typer.Exit(code=1)
-
+    
     try:
         root = ensure_dir(out)
+        
+        # Define directories
         ingest_dir = root / "ingest"
         compensate_dir = root / "compensate"
         qc_dir = root / "qc"
         gate_dir = root / "gate"
         drift_dir = root / "drift"
         stats_dir = root / "stats"
+        
+        # Execute pipeline
+        ingestion_result = IngestionStage(ingest_dir, samplesheet, cfg).run()
+        compensation_result = CompensationStage(compensate_dir, workers, spill).run(ingestion_result)
+        qc_result = QCStage(qc_dir, workers, cfg.qc).run(compensation_result)
+        gating_result = GatingStage(gate_dir, workers, "default", cfg).run(qc_result)
+        DriftStage(drift_dir, batch, cfg).run(gating_result)
+        
+        markers = cfg.channels.markers
+        StatsStage(stats_dir, "condition", markers).run(gating_result)
 
-        stage_ingest(samplesheet, ingest_dir, cfg)
-        stage_compensate(ingest_dir, compensate_dir, spill, workers)
-        stage_qc(compensate_dir, qc_dir, cfg.qc, workers)
-        stage_gate(qc_dir, gate_dir, "default", cfg, workers)
-        stage_drift(gate_dir, drift_dir, batch, cfg)
-        markers = _resolve_marker_columns(None, cfg)
-        stage_stats(gate_dir, stats_dir, "condition", markers)
-
+        # Build final report
         report_path = root / "report.html"
         template_path = cfg.report.figure_format
         build_report(str(root), str(template_path), str(report_path))
@@ -971,61 +978,3 @@ def _resolve_marker_columns(values: str | None, cfg: AppConfig) -> Iterable[str]
     if isinstance(markers, list) and markers:
         return markers
     raise typer.BadParameter("No marker columns provided via --values or config channels.markers")
-
-# ---------------------------------------------------------------------------
-# Parallel processing worker functions
-
-def _compensate_sample(record, indir, events_dir, meta_dir, spill):
-    """Worker function to compensate a single sample."""
-    events = load_dataframe(indir / record["events_file"])
-    metadata = _read_json(indir / record["metadata_file"])
-    matrix, channels = get_spillover(metadata, str(spill) if spill else None)
-    if matrix is not None and channels is not None:
-        events = apply_compensation(events, matrix, channels)
-        metadata["compensated"] = True
-    else:
-        metadata["compensated"] = False
-    sample_id = record["sample_id"]
-    save_dataframe(events, events_dir / f"{sample_id}.parquet")
-    _write_json(meta_dir / f"{sample_id}.json", metadata)
-    record["events_file"] = f"events/{sample_id}.parquet"
-    record["metadata_file"] = f"metadata/{sample_id}.json"
-    return record
-
-def _qc_sample(record, indir, events_dir, meta_dir, qc_config):
-    """Worker function to QC a single sample."""
-    df = load_dataframe(indir / record["events_file"])
-    qc_df = add_qc_flags(df, qc_config.dict())
-    sample_id = record["sample_id"]
-    save_dataframe(qc_df, events_dir / f"{sample_id}.parquet")
-    _write_json(meta_dir / f"{sample_id}.json", _read_json(indir / record["metadata_file"]))
-    record["events_file"] = f"events/{sample_id}.parquet"
-    record["metadata_file"] = f"metadata/{sample_id}.json"
-    return record, qc_df
-
-def _gate_sample(record, indir, events_dir, params_dir, figures_dir, strategy, gate_config, channels):
-    """Worker function to gate a single sample."""
-    sample_id = record["sample_id"]
-    df = load_dataframe(indir / record["events_file"])
-    gated, params = auto_gate(df, strategy=strategy, config=gate_config)
-    save_dataframe(gated, events_dir / f"{sample_id}.parquet")
-    _write_json(params_dir / f"{sample_id}.json", params)
-    record["events_file"] = f"events/{sample_id}.parquet"
-    record["params_file"] = f"params/{sample_id}.json"
-
-    summary_row = {
-        "sample_id": sample_id,
-        "input_events": len(df),
-        "gated_events": len(gated),
-    }
-
-    fig = plot_gating_scatter(
-        df,
-        gated,
-        channels.get("fsc_a", "FSC-A"),
-        channels.get("ssc_a", "SSC-A"),
-        str(figures_dir / f"{sample_id}_gating.png"),
-    )
-    plt.close(fig)
-
-    return record, summary_row
