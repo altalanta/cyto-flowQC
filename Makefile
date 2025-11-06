@@ -36,7 +36,7 @@ type-check: ## Run mypy type checking
 
 .PHONY: test
 test: ## Run pytest
-	poetry run pytest -v --cov=cytoflow_qc --cov-report=xml
+	poetry run pytest -v --cov=cytoflow_qc --cov-report=xml --cov-fail-under=80
 
 .PHONY: test-cov
 test-cov: ## Run pytest with coverage
