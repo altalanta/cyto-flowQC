@@ -20,3 +20,5 @@ classifiers = [
 [project.entry-points."cytoflow_qc.gating_strategies"]
 custom_density = "cytoflow_qc_custom_gating.gating:CustomDensityGating"
 
+
+
