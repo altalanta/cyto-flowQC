@@ -210,6 +210,7 @@ from cytoflow_qc.realtime import WebSocketProcessor, RealTimeMonitor
 from cytoflow_qc.security import DataAnonymizer, DataEncryptor, RBACManager, SecurityError
 from cytoflow_qc.experiment_design import ExperimentManager, CohortManager
 from cytoflow_qc.data_connectors import get_connector, DataSourceError
+from cytoflow_qc.configure import generate_config_interactive
 
 app = typer.Typer(add_completion=False, help="Flow cytometry QC and gating pipeline")
 logger = logging.getLogger("cytoflow_qc")
@@ -220,6 +221,16 @@ def _version(ctx: typer.Context, version: bool = typer.Option(False, "--version"
     if version:
         typer.echo(__version__)
         raise typer.Exit()
+
+
+@app.command()
+def configure():
+    """Launch an interactive tool to generate a config.yaml file."""
+    try:
+        generate_config_interactive()
+    except Exception as e:
+        logger.error(f"Failed to generate configuration: {e}", exc_info=True)
+        raise typer.Exit(1)
 
 
 @app.command()
