@@ -1,4 +1,4 @@
-# CytoFlow-QC
+plea# CytoFlow-QC
 
 Automated, reproducible quality control, compensation, and gating for flow cytometry experiments. CytoFlow-QC replaces fragile manual FlowJo pipelines with a scriptable workflow that ingests FCS batches, applies spillover compensation, performs automated QC + gating, detects batch drift, runs basic effect-size statistics, and emits a publication-ready HTML report.
 
@@ -41,6 +41,14 @@ docker run --rm -v $(pwd):/workspace cytoflow-qc cytoflow-qc --help
    ```bash
    cytoflow-qc dashboard --indir results/
    ```
+
+## Interactive Configuration
+
+To simplify the setup process, you can use the interactive configuration generator. This tool will ask you a series of questions and create a `config.yaml` file based on your answers.
+
+```bash
+cytoflow-qc configure
+```
 
 ## Interactive Pipeline Launcher
 
