@@ -62,3 +62,5 @@ def test_plugin_discovery_handles_bad_plugins(mock_entry_points):
     registry = PluginRegistry()
     available = registry.get_available_plugins("gating")
     assert "bad_plugin" not in available["gating"]
+
+
