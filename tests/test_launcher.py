@@ -50,3 +50,5 @@ def test_launcher_handles_error(mock_popen):
     at.sidebar.button[0].click().run()
 
     assert "Pipeline failed with exit code 1." in at.error[0].value
+
+
