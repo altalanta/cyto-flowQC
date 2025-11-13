@@ -24,34 +24,54 @@ cytoflow-qc-my-gating/
         └── gating.py
 ```
 
-### 2. Define the Plugin Class
+### 2. Define a Pydantic Model for Configuration
 
-In `gating.py`, create a class that inherits from `GatingStrategyPlugin` and implements the required `gate` method.
+Create a Pydantic `BaseModel` to define the schema, default values, and validation rules for your plugin's configuration. This makes your plugin robust and user-friendly.
 
 ```python
 # src/my_gating_strategy/gating.py
-from typing import Any, Dict, Tuple
+from pydantic import BaseModel, Field
+
+class MyGateConfig(BaseModel):
+    my_parameter: float = Field(1.0, description="An example parameter.")
+    some_threshold: int = Field(10, gt=0)
+```
+
+### 3. Implement the Plugin Class
+
+In `gating.py`, create your main plugin class. It must inherit from `GatingStrategyPlugin` and implement two things:
+1.  The `config_model` property, which returns your Pydantic model class.
+2.  The `gate` method, which contains your core logic.
+
+```python
+# src/my_gating_strategy/gating.py
+from typing import Any, Dict, Tuple, Type
 import pandas as pd
 from cytoflow_qc.plugins.base import GatingStrategyPlugin
+from pydantic import BaseModel
+
+# ... (Your MyGateConfig model from above) ...
 
 class MyCustomGate(GatingStrategyPlugin):
     """A brief description of your custom gate."""
 
-    def get_default_config(self) -> Dict[str, Any]:
-        """Define default parameters for your gate."""
-        return {"my_parameter": 1.0}
+    @property
+    def config_model(self) -> Type[BaseModel]:
+        return MyGateConfig
 
     def gate(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, float]]:
         """Implement your gating logic here."""
-        # Your gating logic goes here...
-        gated_df = df[df["FSC-A"] > self.config["my_parameter"]]
-        params = {"parameter_used": self.config["my_parameter"]}
+        # Access validated config through self.config
+        threshold = self.config.some_threshold
+        
+        gated_df = df[df["FSC-A"] > threshold]
+        params = {"threshold_used": threshold}
         return gated_df, params
 ```
 
-### 3. Register the Plugin with an Entry Point
+### 4. Register the Plugin with an Entry Point
 
-In your `pyproject.toml` file, you need to register your new class as a plugin using a special entry point.
+In your `pyproject.toml` file, register your new class as a plugin using a special entry point.
 
 ```toml
 # pyproject.toml
@@ -63,19 +83,24 @@ my-custom-gate = "my_gating_strategy.gating:MyCustomGate"
 -   `my-custom-gate` is the name you will use to refer to your strategy in the `cytoflow-qc` CLI (e.g., `--strategy my-custom-gate`).
 -   `my_gating_strategy.gating:MyCustomGate` is the import path to your plugin class.
 
-### 4. Install and Use Your Plugin
+### 5. Install and Use Your Plugin
 
-To use your new plugin, install it in the same Python environment as `cytoflow-qc`:
+Install your plugin in the same Python environment as `cytoflow-qc`:
 
 ```bash
 pip install ./cytoflow-qc-my-gating
 ```
 
-Once installed, `cytoflow-qc` will automatically discover your plugin, and you can use it in your pipeline:
+Once installed, you can configure and use your plugin in your main `config.yaml`:
 
-```bash
-cytoflow-qc gate --strategy my-custom-gate ...
+```yaml
+gating:
+  strategy: 'my-custom-gate'  # Tell the pipeline to use your plugin
+  my-custom-gate:             # Configuration for your plugin (will be validated)
+    some_threshold: 15
 ```
+
+When the pipeline runs, `cytoflow-qc` will automatically find, load, and validate the configuration for your plugin.
 
 For a complete working example, see the `example_plugin` directory in the main `cytoflow-qc` repository.
 

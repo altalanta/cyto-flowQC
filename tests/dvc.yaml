@@ -10,14 +10,10 @@ stages:
       - samplesheets/example_samplesheet.csv
       - configs/example_config.yaml
       - src/cytoflow_qc
+    params:
+      - workers
     outs:
       - dvc_repro_results
     metrics:
       - dvc_repro_results/stats/effect_sizes.csv:
           cache: false
-
-
-
-
-
-
