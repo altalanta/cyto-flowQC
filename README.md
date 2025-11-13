@@ -36,8 +36,8 @@ docker run --rm -v $(pwd):/workspace cytoflow-qc cytoflow-qc --help
    cytoflow-qc run --samplesheet samplesheets/example_samplesheet.csv \
      --config configs/example_config.yaml --out results
    ```
-5. Open `results/report.html` to review QC, gating, drift, and effect-size outputs.
-6. **Optional:** Launch the interactive dashboard for deeper exploration:
+5. Open `results/report.html` to review the interactive report, which includes sortable tables and explorable plots for QC, gating, drift, and effect-size outputs.
+6. **Optional:** Launch the live analysis dashboard for deeper exploration:
    ```bash
    cytoflow-qc dashboard --indir results/
    ```
