@@ -184,8 +184,8 @@ from cytoflow_qc.pipeline import (
     IngestionStage,
     DriftStage,
     StatsStage,
+    ReportStage,
 )
-from cytoflow_qc.report import build_report
 from cytoflow_qc.utils import (
     ensure_dir,
     list_stage_events,
@@ -210,6 +210,7 @@ from cytoflow_qc.realtime import WebSocketProcessor, RealTimeMonitor
 from cytoflow_qc.security import DataAnonymizer, DataEncryptor, RBACManager, SecurityError
 from cytoflow_qc.experiment_design import ExperimentManager, CohortManager
 from cytoflow_qc.data_connectors import get_connector, DataSourceError
+from cytoflow_qc.configure import generate_config_interactive
 
 app = typer.Typer(add_completion=False, help="Flow cytometry QC and gating pipeline")
 logger = logging.getLogger("cytoflow_qc")
@@ -220,6 +221,16 @@ def _version(ctx: typer.Context, version: bool = typer.Option(False, "--version"
     if version:
         typer.echo(__version__)
         raise typer.Exit()
+
+
+@app.command()
+def configure():
+    """Launch an interactive tool to generate a config.yaml file."""
+    try:
+        generate_config_interactive()
+    except Exception as e:
+        logger.error(f"Failed to generate configuration: {e}", exc_info=True)
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -299,9 +310,8 @@ def stats(
 def report(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
-    template: Path = typer.Option(Path("configs/report_template.html.j2"), "--template"),
 ) -> None:
-    build_report(str(indir), str(template), str(out))
+    ReportStage(indir).run()
     logger.info(f"Report written to {out}")
 
 
@@ -760,16 +770,14 @@ def run(
         compensation_result = CompensationStage(compensate_dir, workers, spill).run(ingestion_result)
         qc_result = QCStage(qc_dir, workers, cfg.qc).run(compensation_result)
         gating_result = GatingStage(gate_dir, workers, "default", cfg).run(qc_result)
-        DriftStage(drift_dir, batch, cfg).run(gating_result)
+        drift_result = DriftStage(drift_dir, batch, cfg).run(gating_result)
         
         markers = cfg.channels.markers
-        StatsStage(stats_dir, "condition", markers).run(gating_result)
+        stats_result = StatsStage(stats_dir, "condition", markers).run(gating_result)
 
         # Build final report
-        report_path = root / "report.html"
-        template_path = cfg.report.figure_format
-        build_report(str(root), str(template_path), str(report_path))
-        logger.info(f"Report available at {report_path}")
+        ReportStage(root).run(stats_result)
+        
     except CytoflowQCError as e:
         logger.error(f"A pipeline error occurred: {e}", exc_info=True)
         raise typer.Exit(code=1)

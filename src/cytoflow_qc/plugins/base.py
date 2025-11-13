@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Type
 
 import pandas as pd
+from pydantic import BaseModel, ValidationError
 
 
 class PluginError(Exception):
@@ -20,17 +21,20 @@ class PluginLoadError(PluginError):
 
 class PluginBase(ABC):
     """Base class for all cytoflow-qc plugins."""
+    config: BaseModel
+
+    @property
+    @abstractmethod
+    def config_model(self) -> Type[BaseModel]:
+        """The Pydantic model for the plugin's configuration."""
+        raise NotImplementedError
 
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
-        """Initialize plugin with configuration."""
-        self.config = self.get_default_config()
-        if config:
-            self.config.update(config)
-
-    @abstractmethod
-    def get_default_config(self) -> Dict[str, Any]:
-        """Get default configuration parameters for this plugin."""
-        raise NotImplementedError
+        """Initialize plugin with configuration and validate it."""
+        try:
+            self.config = self.config_model(**(config or {}))
+        except ValidationError as e:
+            raise PluginError(f"Invalid configuration for plugin {self.__class__.__name__}:\n{e}") from e
 
     def __repr__(self) -> str:
         """String representation of the plugin."""

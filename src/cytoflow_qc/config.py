@@ -2,7 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, Extra
 
 class ChannelConfig(BaseModel):
     fsc_a: str = 'FSC-A'
@@ -50,6 +50,9 @@ class GatingConfig(BaseModel):
     lymphocytes: LymphocytesConfig = Field(default_factory=LymphocytesConfig)
     singlets: SingletsConfig = Field(default_factory=SingletsConfig)
 
+    class Config:
+        extra = Extra.allow
+
 class CompensationConfig(BaseModel):
     method: str = 'auto'
     matrix_file: Path | None = None
@@ -89,6 +92,8 @@ def load_and_validate_config(config_path: Path) -> AppConfig:
         raise
     except (yaml.YAMLError, ValidationError) as e:
         raise ValueError(f"Error parsing or validating config file {config_path}:\\n{e}") from e
+
+
 
 
 

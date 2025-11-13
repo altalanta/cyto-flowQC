@@ -44,7 +44,8 @@ def auto_gate(
     # Try to load a plugin for the given strategy
     try:
         registry = get_plugin_registry()
-        gating_plugin = registry.load_plugin("gating", strategy, config)
+        plugin_config = config.get(strategy, {})  # Extract config for this specific strategy
+        gating_plugin = registry.load_plugin("gating", strategy, plugin_config)
         return gating_plugin.gate(df_clean)
     except Exception as e:
         raise GatingError(f"Failed to load or execute gating strategy '{strategy}': {e}") from e
