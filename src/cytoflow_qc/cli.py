@@ -211,6 +211,8 @@ from cytoflow_qc.security import DataAnonymizer, DataEncryptor, RBACManager, Sec
 from cytoflow_qc.experiment_design import ExperimentManager, CohortManager
 from cytoflow_qc.data_connectors import get_connector, DataSourceError
 from cytoflow_qc.configure import generate_config_interactive
+from cytoflow_qc.scaffold import create_plugin_scaffold
+from cytoflow_qc.validation import validate_inputs
 
 app = typer.Typer(add_completion=False, help="Flow cytometry QC and gating pipeline")
 logger = logging.getLogger("cytoflow_qc")
@@ -230,6 +232,17 @@ def configure():
         generate_config_interactive()
     except Exception as e:
         logger.error(f"Failed to generate configuration: {e}", exc_info=True)
+        raise typer.Exit(1)
+
+
+@app.command()
+def validate(
+    samplesheet: Path = typer.Option(..., "--samplesheet", exists=True, help="Path to the samplesheet CSV file."),
+    config: Path = typer.Option(..., "--config", exists=True, help="Path to the main YAML configuration file."),
+):
+    """Validate input files and configuration without running the full pipeline."""
+    setup_logging(Path.cwd())
+    if not validate_inputs(samplesheet, config):
         raise typer.Exit(1)
 
 
@@ -468,12 +481,16 @@ def export_3d(
 
 @app.command()
 def plugins(
-    action: str = typer.Argument(..., help="Plugin action (list, info, load)"),
+    action: str = typer.Argument(..., help="Plugin action (list, info, create)"),
     plugin_type: str | None = typer.Option(None, "--type", "-t", help="Plugin type filter"),
     plugin_name: str | None = typer.Option(None, "--name", "-n", help="Specific plugin name"),
     config: str | None = typer.Option(None, "--config", "-c", help="Plugin configuration"),
 ) -> None:
     """Manage and interact with cytoflow-qc plugins."""
+    if action == "create":
+        create_plugin_scaffold()
+        return
+
     registry = get_plugin_registry()
 
     if action == "list":
@@ -746,8 +763,18 @@ def run(
         "-w",
         help="Number of worker processes to use."
     ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate inputs and exit without running the pipeline."),
 ) -> None:
     setup_logging(out)
+    
+    # Perform validation
+    if not validate_inputs(samplesheet, config):
+        raise typer.Exit(1)
+        
+    if dry_run:
+        logger.info("Dry run successful. Exiting without running the pipeline.")
+        return
+
     try:
         cfg = load_and_validate_config(config)
     except (ValueError, FileNotFoundError) as e:

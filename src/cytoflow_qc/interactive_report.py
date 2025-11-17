@@ -89,3 +89,4 @@ def create_and_save_report(results_dir: Path, output_path: Path):
     """Generate and save the interactive HTML report."""
     dashboard = create_interactive_report(results_dir)
     dashboard.save(filename=output_path, embed=True, embed_json=True, save_path='./')
+
