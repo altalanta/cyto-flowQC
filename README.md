@@ -42,6 +42,20 @@ docker run --rm -v $(pwd):/workspace cytoflow-qc cytoflow-qc --help
    cytoflow-qc dashboard --indir results/
    ```
 
+## Validating Inputs
+
+Before running a full analysis, you can validate your `samplesheet.csv` and `config.yaml` to catch common errors early:
+
+```bash
+cytoflow-qc validate --samplesheet path/to/samplesheet.csv --config path/to/config.yaml
+```
+
+You can also perform a "dry run" of the main command, which will run the same validation checks and then exit:
+
+```bash
+cytoflow-qc run --dry-run --samplesheet ... --config ...
+```
+
 ## Interactive Configuration
 
 To simplify the setup process, you can use the interactive configuration generator. This tool will ask you a series of questions and create a `config.yaml` file based on your answers.
@@ -59,6 +73,16 @@ cytoflow-qc launch
 ```
 
 This will open a web application in your browser where you can upload your samplesheet and configuration files, adjust parameters, and run the pipeline with real-time log output.
+
+## Extending CytoFlow-QC with Plugins
+
+CytoFlow-QC can be extended with custom plugins for gating strategies, QC methods, and more. To simplify the process of creating a new plugin, you can use the built-in scaffolding tool:
+
+```bash
+cytoflow-qc plugins create
+```
+
+This command will launch an interactive questionnaire that guides you through the process of creating a new, installable plugin package with all the necessary boilerplate. For more details on the plugin architecture, see the [Plugin Development Guide](plugins/README.md).
 
 ## Reproducibility with DVC
 
