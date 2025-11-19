@@ -6,9 +6,15 @@ PY ?= $(VENV)/bin/python
 .DEFAULT_GOAL := help
 
 .PHONY: help
-help: ## Show this help message
-	@echo "Available targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
+help:
+	@echo "Commands:"
+	@echo "  setup-dev       : Install dependencies and set up pre-commit hooks."
+	@echo "  lint            : Run linters and type checkers."
+	@echo "  lint-fix        : Run all pre-commit hooks to format and lint the codebase."
+	@echo "  test            : Run tests."
+	@echo "  test-cov        : Run tests and generate a coverage report."
+	@echo "  docker-build    : Build the Docker image."
+	@echo "  clean           : Clean up build artifacts."
 
 .PHONY: setup
 setup: ## Create environment and install dependencies with Poetry
@@ -20,9 +26,15 @@ setup: ## Create environment and install dependencies with Poetry
 setup-pip: ## This target is now an alias for setup
 	@$(MAKE) setup
 
+.PHONY: setup-dev
+setup-dev:
+	poetry install
+	poetry run pre-commit install
+
 .PHONY: lint
-lint: ## Run ruff linter
-	ruff check src tests
+lint:
+	poetry run ruff check src tests
+	poetry run mypy src
 	black --check src tests
 
 .PHONY: format
@@ -35,8 +47,8 @@ type-check: ## Run mypy type checking
 	mypy src
 
 .PHONY: test
-test: ## Run pytest
-	poetry run pytest -v --cov=cytoflow_qc --cov-report=xml --cov-fail-under=80
+test:
+	poetry run pytest --cov=src --cov-report=term-missing --cov-fail-under=80
 
 .PHONY: test-cov
 test-cov: ## Run pytest with coverage
@@ -100,3 +112,7 @@ serve: ## Start both dashboard and API
 	@echo "API: http://localhost:8000"
 	@echo "Press Ctrl+C to stop"
 	@trap 'kill 0' INT; python -m cytoflow_qc.api & cytoflow-qc dashboard --indir results/ --port 8501
+
+.PHONY: lint-fix
+lint-fix:
+	poetry run pre-commit run --all-files

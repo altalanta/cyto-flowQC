@@ -2,29 +2,44 @@ plea# CytoFlow-QC
 
 Automated, reproducible quality control, compensation, and gating for flow cytometry experiments. CytoFlow-QC replaces fragile manual FlowJo pipelines with a scriptable workflow that ingests FCS batches, applies spillover compensation, performs automated QC + gating, detects batch drift, runs basic effect-size statistics, and emits a publication-ready HTML report.
 
-## Install
+## Installation
 
-### Poetry (Recommended)
+For the most reliable and reproducible results, we recommend running the pipeline using Docker.
 
-1. Install Poetry:
-   ```bash
-   curl -sSL https://install.python-poetry.org | python3 -
-   ```
-2. Configure Poetry to create virtual environments in the project's root:
-   ```bash
-   poetry config virtualenvs.in-project true
-   ```
-3. Install dependencies:
-   ```bash
-   poetry install --with dev
-   ```
+### Docker (Recommended)
 
-### Docker
+1.  **Build the Docker image:**
+    ```bash
+    docker build -t cytoflow-qc .
+    ```
 
-```bash
-docker build -t cytoflow-qc .
-docker run --rm -v $(pwd):/workspace cytoflow-qc cytoflow-qc --help
-```
+2.  **Run the pipeline:**
+    Mount your local data, configuration, and results directories into the container.
+
+    ```bash
+    docker run --rm \
+      -v "$(pwd)/data:/app/data" \
+      -v "$(pwd)/configs:/app/configs" \
+      -v "$(pwd)/results:/app/results" \
+      cytoflow-qc run --samplesheet /app/data/samplesheet.csv --config /app/configs/config.yaml --out /app/results
+    ```
+
+### Local Installation with Poetry
+
+For development or if you prefer a local installation:
+
+1.  **Install Poetry:**
+    ```bash
+    curl -sSL https://install.python-poetry.org | python3 -
+    ```
+2.  **Install dependencies:**
+    ```bash
+    poetry install
+    ```
+3.  **Run the pipeline:**
+    ```bash
+    poetry run cytoflow-qc run ...
+    ```
 
 ## Quickstart
 
