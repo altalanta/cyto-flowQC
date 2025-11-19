@@ -50,3 +50,4 @@ def create_plugin_scaffold():
 
 if __name__ == '__main__':
     create_plugin_scaffold()
+

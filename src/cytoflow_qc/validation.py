@@ -73,3 +73,4 @@ def validate_inputs(samplesheet_path: Path, config_path: Path) -> bool:
         logger.error("\n💥 Input validation failed. Please fix the errors above before running the pipeline.")
 
     return checks_passed
+

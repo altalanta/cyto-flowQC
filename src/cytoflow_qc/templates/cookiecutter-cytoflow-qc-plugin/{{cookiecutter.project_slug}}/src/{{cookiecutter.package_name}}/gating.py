@@ -20,3 +20,4 @@ class {{ cookiecutter.plugin_name.replace(' ', '') }}Plugin(GatingStrategyPlugin
         gated_df = df[df['FSC-A'] > threshold].copy()
         params = {"threshold_used": threshold}
         return gated_df, params
+
