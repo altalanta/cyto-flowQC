@@ -1,32 +1,52 @@
-FROM python:3.11-slim
+# Stage 1: Builder
+FROM python:3.11-slim as builder
 
-ENV POETRY_VERSION=1.8.3 \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    CYTOFLOW_QC_HOME=/opt/cytoflow-qc \
-    POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=false
-
+# Install system dependencies required for building
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+    git
 
-# Install poetry
+# Install Poetry
+ENV POETRY_HOME="/opt/poetry" \
+    POETRY_VERSION=1.8.3
 RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="$POETRY_HOME/bin:$PATH"
 
-WORKDIR ${CYTOFLOW_QC_HOME}
+# Set up the build environment
+WORKDIR /app
+COPY poetry.lock pyproject.toml ./
 
-COPY pyproject.toml poetry.lock ./
-RUN poetry install --no-dev --no-root
+# Install dependencies, including dev dependencies to build the wheel
+RUN poetry install --no-root
 
-COPY src src
-COPY configs configs
-COPY samplesheets samplesheets
-COPY notebooks notebooks
+# Copy the application source code
+COPY src ./src
 
-RUN poetry install --no-dev
+# Build the wheel
+RUN poetry build -f wheel -n
 
-ENTRYPOINT ["poetry", "run", "cytoflow-qc"]
+
+# Stage 2: Production
+FROM python:3.11-slim as production
+
+# Create a non-root user
+RUN useradd --create-home appuser
+WORKDIR /home/appuser
+USER appuser
+
+# Install only runtime dependencies
+COPY --from=builder /app/poetry.lock /app/pyproject.toml /home/appuser/
+RUN pip install --no-cache-dir poetry==1.8.3 && \
+    poetry config virtualenvs.create false && \
+    poetry install --no-dev --no-root
+
+# Copy the built wheel from the builder stage
+COPY --from=builder /app/dist/*.whl .
+
+# Install the application wheel
+RUN pip install --no-cache-dir *.whl
+
+# Set the entrypoint
+ENTRYPOINT ["cytoflow-qc"]
 CMD ["--help"]
