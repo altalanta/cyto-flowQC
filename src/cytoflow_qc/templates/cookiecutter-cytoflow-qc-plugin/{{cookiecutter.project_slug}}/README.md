@@ -9,3 +9,4 @@ Install this plugin alongside `cytoflow-qc`:
 ```bash
 pip install -e .
 ```
+
