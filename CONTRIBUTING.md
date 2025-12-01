@@ -1,70 +1,50 @@
 # Contributing to CytoFlow-QC
 
-We welcome contributions from the community! Whether you're fixing a bug, improving documentation, or proposing a new feature, your help is valued. Please take a moment to review this document to ensure a smooth and effective contribution process.
+First off, thank you for considering contributing to CytoFlow-QC! It's people like you that make this such a great tool.
 
 ## Getting Started
 
-1.  **Fork the repository:** Start by forking the [main repository](https://github.com/cytoflow-qc/cytoflow-qc) on GitHub.
-2.  **Clone your fork:**
+1.  **Fork the repository** on GitHub.
+2.  **Clone your fork** locally:
     ```bash
-    git clone https://github.com/YOUR_USERNAME/cytoflow-qc.git
+    git clone https://github.com/your-username/cytoflow-qc.git
     cd cytoflow-qc
     ```
-3.  **Set up the development environment:** We use Poetry for dependency management.
+3.  **Set up the development environment.** We use Poetry for dependency management and pre-commit for code quality. The `setup-dev` command in the `Makefile` will get you set up.
     ```bash
-    make setup
+    make setup-dev
     ```
-    This will install all dependencies, including development tools, and set up pre-commit hooks.
+    This will install all dependencies into a local `.venv` directory and set up the pre-commit hooks, which will automatically format and lint your code before you commit.
 
-## Development Workflow
+## Making Changes
 
-1.  **Create a new branch:** Create a descriptive branch name for your changes.
+1.  **Create a new branch** for your feature or bug fix:
     ```bash
-    git checkout -b feature/my-new-feature
-    # or
-    git checkout -b fix/bug-fix-description
+    git checkout -b your-feature-branch-name
     ```
-2.  **Make your changes:** Write your code, following the existing code style.
-3.  **Ensure code quality:** Before committing, run the quality assurance checks:
+2.  **Make your changes.** Write clean, readable code and include tests for any new functionality.
+3.  **Ensure all pre-commit checks pass.** The hooks will run automatically when you commit. If they fail, you'll need to fix the issues and re-add the files to your commit. You can also run the checks manually at any time:
     ```bash
-    make lint   # Check for linting errors
-    make format # Automatically format the code
-    make test   # Run the test suite
+    make lint-fix
     ```
-4.  **Commit your changes:** Write a clear and concise commit message.
+4.  **Run the full test suite** to ensure your changes haven't introduced any regressions:
     ```bash
-    git commit -m "feat: Add new feature"
-    ```
-5.  **Push to your fork:**
-    ```bash
-    git push origin feature/my-new-feature
+    make test
     ```
 
 ## Submitting a Pull Request
 
-1.  Open a pull request from your fork to the `main` branch of the original repository.
-2.  Provide a clear title and description of your changes. If your PR addresses an existing issue, please reference it (e.g., `Closes #123`).
-3.  The maintainers will review your pull request. Please be responsive to any feedback or requested changes.
-
-## Visual Regression Testing
-
-We use `pytest-mpl` for visual regression testing of our plots. This ensures that visual outputs remain consistent.
-
--   **Running the tests:**
+1.  **Push your branch** to your fork on GitHub:
     ```bash
-    poetry run pytest tests/test_visuals.py
+    git push origin your-feature-branch-name
     ```
--   **Updating baseline images:** If you make intentional changes to a plot, the visual tests will fail. To update the baseline images, run:
-    ```bash
-    poetry run pytest tests/test_visuals.py --mpl-generate-path=tests/baseline
-    ```
-    Then, commit the new baseline images in the `tests/baseline` directory along with your code changes.
+2.  **Open a pull request** to the `main` branch of the original repository.
+3.  **Provide a clear description** of your changes in the pull request. Explain the problem you're solving and the approach you've taken.
 
-## Code Style
+## Code of Conduct
 
-- We use `black` for code formatting and `ruff` for linting. The pre-commit hooks will help enforce this, and you can run `make format` to apply the correct style.
-- Follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) for naming conventions and docstrings.
+Please note that this project is released with a [Contributor Code of Conduct](CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
 
-Thank you for contributing!
+Thank you for your contribution!
 
 

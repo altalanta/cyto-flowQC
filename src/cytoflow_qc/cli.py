@@ -213,6 +213,7 @@ from cytoflow_qc.data_connectors import get_connector, DataSourceError
 from cytoflow_qc.configure import generate_config_interactive
 from cytoflow_qc.scaffold import create_plugin_scaffold
 from cytoflow_qc.validation import validate_inputs
+from cytoflow_qc.provenance import generate_provenance_report
 
 app = typer.Typer(add_completion=False, help="Flow cytometry QC and gating pipeline")
 logger = logging.getLogger("cytoflow_qc")
@@ -784,6 +785,10 @@ def run(
     try:
         root = ensure_dir(out)
         
+        # Generate and save provenance information
+        logger.info("Generating provenance report...")
+        generate_provenance_report(cfg, samplesheet, root)
+        
         # Define directories
         ingest_dir = root / "ingest"
         compensate_dir = root / "compensate"
@@ -819,7 +824,7 @@ def stage_ingest(samplesheet: Path, out_dir: Path, config: AppConfig) -> None:
     meta_dir = ensure_dir(out_dir / "metadata")
 
     sheet = load_samplesheet(str(samplesheet))
-    channel_map = config.channels.dict()
+    channel_map = config.channels.model_dump()
 
     records = []
     for row in sheet.to_dict(orient="records"):
@@ -902,8 +907,8 @@ def stage_gate(indir: Path, out_dir: Path, strategy: str, config: AppConfig, wor
     figures_dir = ensure_dir(out_dir / "figures")
     manifest = read_manifest(indir / "manifest.csv")
 
-    gate_config = config.gating.dict()
-    gate_config["channels"] = config.channels.dict()
+    gate_config = config.gating.model_dump()
+    gate_config["channels"] = config.channels.model_dump()
     channels = gate_config.get("channels", {})
 
     summary_rows = []

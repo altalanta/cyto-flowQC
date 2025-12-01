@@ -44,20 +44,18 @@ pytest = ">=8.0.0"
 pytest-cov = ">=4.0.0"
 pytest-benchmark = ">=4.0.0"
 pytest-xdist = ">=3.0.0"
+pytest-mpl = ">=0.16.1"
 hypothesis = ">=6.0.0"
 mutmut = ">=2.0.0"
 faker = ">=19.0.0"
 ruff = ">=0.2.0"
 black = ">=24.0.0"
+isort = ">=5.12.0"
 pre-commit = ">=3.0.0"
 mypy = ">=1.8.0"
 mkdocs = ">=1.4.0"
 mkdocs-material = ">=9.0.0"
 dvc = {extras = ["s3", "gcs"], version = ">=3.0.0"}
-pytest-mpl = ">=0.16.1"
-pre-commit = ">=3.0.0"
-black = ">=24.0.0"
-isort = ">=5.12.0"
 pandas-stubs = ">=2.2.0"
 types-pyyaml = ">=6.0.0"
 streamlit-stubs = ">=0.1.0"
@@ -111,24 +109,38 @@ dependencies = [
     "plotly>=5.17.0",
     "bokeh>=3.3.0",
     "altair>=5.1.0",
-    "seaborn>=0.12.0",
     "kaleido>=0.2.1",
     "cryptography>=41.0.0",
+    "pydantic>=2.0.0",
+    "questionary>=2.0.0",
+    "panel>=1.4.0",
+    "hvplot>=0.9.0",
+    "holoviews>=1.18.0",
+    "pyarrow>=16.0.0",
+    "cookiecutter>=2.5.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
+    "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
     "pytest-benchmark>=4.0.0",
     "pytest-xdist>=3.0.0",
+    "pytest-mpl>=0.16.1",
     "hypothesis>=6.0.0",
     "mutmut>=2.0.0",
     "faker>=19.0.0",
-    "ruff>=0.1.0",
-    "black>=23.0.0",
+    "ruff>=0.2.0",
+    "black>=24.0.0",
+    "isort>=5.12.0",
     "pre-commit>=3.0.0",
-    "mypy>=1.0.0",
+    "mypy>=1.8.0",
+    "mkdocs>=1.4.0",
+    "mkdocs-material>=9.0.0",
+    "dvc[s3,gcs]>=3.0.0",
+    "pandas-stubs>=2.2.0",
+    "types-pyyaml>=6.0.0",
+    "streamlit-stubs>=0.1.0",
 ]
 cloud = [
     "boto3>=1.28.0",

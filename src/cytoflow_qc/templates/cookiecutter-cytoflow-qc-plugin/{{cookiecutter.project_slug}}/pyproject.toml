@@ -20,3 +20,5 @@ classifiers = [
 [project.entry-points."cytoflow_qc.gating_strategies"]
 {{ cookiecutter.project_slug }} = "{{ cookiecutter.package_name }}.gating:{{ cookiecutter.plugin_name.replace(' ', '') }}Plugin"
 
+
+

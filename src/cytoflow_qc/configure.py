@@ -11,7 +11,7 @@ def generate_config_interactive():
     print("This will guide you through creating a `config.yaml` file.")
     print("Press Enter to accept the default value in brackets.")
 
-    defaults = AppConfig().dict()
+    defaults = AppConfig().model_dump()
     config = {}
 
     # --- Channels ---

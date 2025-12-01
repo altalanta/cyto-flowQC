@@ -21,3 +21,5 @@ class {{ cookiecutter.plugin_name.replace(' ', '') }}Plugin(GatingStrategyPlugin
         params = {"threshold_used": threshold}
         return gated_df, params
 
+
+

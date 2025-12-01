@@ -58,12 +58,13 @@ class PipelineStage(ABC):
             cache_file = CACHE_DIR / f"{self.stage_name}_{cache_key}.json"
             if cache_file.exists():
                 logger.info(f"Cache hit for stage '{self.stage_name}'. Loading from cache.")
-                return StageResult.parse_file(cache_file)
+                with open(cache_file, 'r') as f:
+                    return StageResult.model_validate_json(f.read())
         logger.info(f"Cache miss for stage '{self.stage_name}'. Executing stage.")
         output_result = self._run_logic(input_result)
         if cache_key and output_result:
             with open(cache_file, 'w') as f:
-                f.write(output_result.json(indent=2))
+                f.write(output_result.model_dump_json(indent=2))
         return output_result
 
     @abstractmethod
@@ -78,7 +79,7 @@ class PipelineStage(ABC):
         for arg in args:
             if arg is None: continue
             if isinstance(arg, (str, Path)): hasher.update(str(arg).encode())
-            elif isinstance(arg, BaseModel): hasher.update(arg.json(sort_keys=True).encode())
+            elif isinstance(arg, BaseModel): hasher.update(arg.model_dump_json().encode())
             else: hasher.update(str(arg).encode())
         try: source = inspect.getsource(self.process_sample)
         except AttributeError: source = inspect.getsource(self._run_logic)
@@ -96,7 +97,7 @@ class IngestionStage(PipelineStage):
 
     def _run_logic(self, input_result: StageResult | None = None) -> StageResult:
         sheet = load_samplesheet(str(self.samplesheet_path))
-        channel_map = self.config.channels.dict()
+        channel_map = self.config.channels.model_dump()
         samples = []
         for row in sheet.to_dict(orient="records"):
             if row.get("missing_file"): continue
@@ -202,7 +203,7 @@ class QCStage(ParallelPipelineStage):
         first_chunk = True
         all_qc_dfs = []
         for chunk in stream_events(sample.events_file, chunk_size=CHUNK_SIZE):
-            qc_chunk = add_qc_flags(chunk, self.qc_config.dict(), precomputed_percentiles={'fsc_low': fsc_low, 'ssc_low': ssc_low})
+            qc_chunk = add_qc_flags(chunk, self.qc_config.model_dump(), precomputed_percentiles={'fsc_low': fsc_low, 'ssc_low': ssc_low})
             all_qc_dfs.append(qc_chunk)
             if first_chunk:
                 writer = pq.ParquetWriter(events_file, qc_chunk.columns.to_arrow())
@@ -225,8 +226,8 @@ class GatingStage(ParallelPipelineStage):
 
     def process_sample(self, sample: Sample) -> Tuple[Sample, Dict[str, Any]]:
         # Pre-pass to build KDE on a sample of the data
-        gate_config = self.config.gating.dict()
-        gate_config["channels"] = self.config.channels.dict()
+        gate_config = self.config.gating.model_dump()
+        gate_config["channels"] = self.config.channels.model_dump()
         fsc_col = gate_config["channels"].get("fsc_a", "FSC-A")
         ssc_col = gate_config["channels"].get("ssc_a", "SSC-A")
         
