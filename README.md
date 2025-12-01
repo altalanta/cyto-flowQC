@@ -101,37 +101,24 @@ This command will launch an interactive questionnaire that guides you through th
 
 ## Reproducibility with DVC
 
-This project uses [DVC](https://dvc.org) to version data and create a reproducible pipeline. To use it:
+This project uses [DVC](https://dvc.org) to version data and models, ensuring that all results are reproducible. The `dvc.yaml` file defines the pipeline, and you can reproduce the results by running:
 
-1.  **Install DVC:** If you haven't already, install DVC with the necessary cloud provider support:
-    ```bash
-    pip install "dvc[s3,gcs]"
-    ```
-2.  **Configure a remote:** Set up a remote storage location for your data (e.g., S3, GCS, or a local directory).
-    ```bash
-    dvc remote add -d myremote s3://my-bucket/cytoflow-qc
-    ```
-3.  **Retrieve data:** Pull the versioned data from the remote storage.
-    ```bash
-    dvc pull
-    ```
-4.  **Reproduce the pipeline:** Run the full pipeline as defined in `dvc.yaml`.
-    ```bash
-    dvc repro
-    ```
-5.  **Push new data:** If you update the data or results, push them to the remote.
-    ```bash
-    dvc push
-    ```
+```bash
+dvc repro
+```
 
-Reusable Make targets:
+### Data Provenance
 
-- `make setup` – create the poetry env and install pre-commit hooks.
-- `make lint` / `make format` – ruff + black.
-- `make test` – pytest suite with synthetic data.
-- `make smoke` – one-shot CLI run that checks the HTML report exists.
-- `make report` – rebuild the HTML report from existing artifacts.
-- `make dashboard` – launch the interactive web dashboard (requires results/ directory).
+For every pipeline run executed via `cytoflow-qc run`, a `provenance.json` file is generated in the root of the output directory. This file serves as a detailed audit trail for the analysis, capturing a complete snapshot of the execution environment to ensure full reproducibility. It includes:
+
+-   **Timestamp:** The exact time the run was initiated.
+-   **Platform Information:** Details about the operating system and Python version.
+-   **Git Status:** The exact Git commit hash of the code that was executed, including whether the repository was "dirty" (had uncommitted changes).
+-   **DVC Status:** Hashes of all DVC-tracked data files and parameters, ensuring the inputs are fully versioned.
+-   **Inputs:** The complete content of the samplesheet and the configuration file used for the run.
+-   **Dependencies:** A frozen list of all Python packages and their exact versions as captured from the environment.
+
+This file is crucial for debugging, auditing, and faithfully reproducing a specific analysis, even years later.
 
 ## Methods (brief)
 
@@ -283,7 +270,6 @@ cytoflow-qc gate --strategy my_custom_plugin --config plugins.yaml
 
 # Develop new plugins
 cytoflow-qc plugins create --template gating --name my_plugin
-```
 ```
 
 ## Extending
