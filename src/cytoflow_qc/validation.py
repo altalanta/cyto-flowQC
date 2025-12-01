@@ -51,7 +51,7 @@ def validate_inputs(samplesheet_path: Path, config_path: Path) -> bool:
             fcs_metadata = get_fcs_metadata(first_fcs_path)
             fcs_channels = {c['PnN'] for c in fcs_metadata.get('channels', [])}
             
-            configured_channels = set(config.channels.dict().values())
+            configured_channels = set(config.channels.model_dump().values())
             configured_channels.discard(None) # Remove None if viability channel is not set
             
             missing_in_fcs = configured_channels - fcs_channels
@@ -73,4 +73,6 @@ def validate_inputs(samplesheet_path: Path, config_path: Path) -> bool:
         logger.error("\n💥 Input validation failed. Please fix the errors above before running the pipeline.")
 
     return checks_passed
+
+
 
