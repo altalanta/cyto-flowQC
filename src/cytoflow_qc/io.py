@@ -60,6 +60,22 @@ def get_fcs_metadata(path: str) -> dict:
     except Exception as e:
         raise FileOperationError(f"Failed to read metadata from FCS file {path}") from e
 
+
+def read_fcs(path: str) -> tuple[pd.DataFrame, dict]:
+    """
+    Read all events and metadata from an FCS file.
+    
+    Returns:
+        Tuple of (events DataFrame, metadata dict)
+    """
+    try:
+        sample = fk.Sample(path)
+        events = sample.as_dataframe(source='raw')
+        metadata = sample.get_metadata()
+        return events, metadata
+    except Exception as e:
+        raise FileOperationError(f"Failed to read FCS file {path}") from e
+
 def standardize_channels(
     df: pd.DataFrame, metadata: dict, channel_map: dict[str, str]
 ) -> pd.DataFrame:

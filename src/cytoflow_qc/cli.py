@@ -187,6 +187,8 @@ from cytoflow_qc.pipeline import (
     ReportStage,
 )
 from cytoflow_qc.utils import (
+    _read_json,
+    _write_json,
     ensure_dir,
     list_stage_events,
     load_dataframe,
@@ -195,6 +197,12 @@ from cytoflow_qc.utils import (
     timestamp,
     write_manifest,
 )
+from cytoflow_qc.io import load_samplesheet, standardize_channels, get_fcs_metadata, read_fcs
+from cytoflow_qc.compensate import get_spillover, apply_compensation
+from cytoflow_qc.qc import add_qc_flags, qc_summary
+from cytoflow_qc.gate import auto_gate
+from cytoflow_qc.drift import extract_sample_features, compute_batch_drift
+from cytoflow_qc.stats import effect_sizes
 from cytoflow_qc.viz import (
     plot_batch_drift_pca,
     plot_batch_drift_umap,
@@ -1000,15 +1008,86 @@ def stage_stats(indir: Path, out_dir: Path, group_col: str, value_cols: Iterable
 # Helpers
 
 
-def _write_json(path: Path, payload: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, default=str)
+def _compensate_sample(
+    record: dict, indir: Path, events_dir: Path, meta_dir: Path, spill: Path | None
+) -> dict:
+    """Compensate a single sample's events."""
+    sample_id = record["sample_id"]
+    events = load_dataframe(indir / record["events_file"])
+    metadata = _read_json(indir / record["metadata_file"])
+    
+    matrix, channels = get_spillover(metadata, str(spill) if spill else None)
+    if matrix is not None and channels is not None:
+        events = apply_compensation(events, matrix, channels)
+        metadata["compensated"] = True
+    else:
+        metadata["compensated"] = False
+    
+    save_dataframe(events, events_dir / f"{sample_id}.parquet")
+    _write_json(meta_dir / f"{sample_id}.json", metadata)
+    
+    record = dict(record)
+    record["events_file"] = f"events/{sample_id}.parquet"
+    record["metadata_file"] = f"metadata/{sample_id}.json"
+    return record
 
 
-def _read_json(path: Path) -> dict[str, object]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+def _qc_sample(
+    record: dict, indir: Path, events_dir: Path, meta_dir: Path, qc_config: "QCConfig"
+) -> tuple[dict, pd.DataFrame]:
+    """Apply QC flags to a single sample's events."""
+    sample_id = record["sample_id"]
+    events = load_dataframe(indir / record["events_file"])
+    
+    qc_events = add_qc_flags(events, qc_config.model_dump())
+    save_dataframe(qc_events, events_dir / f"{sample_id}.parquet")
+    
+    record = dict(record)
+    record["events_file"] = f"events/{sample_id}.parquet"
+    return record, qc_events
+
+
+def _gate_sample(
+    record: dict,
+    indir: Path,
+    events_dir: Path,
+    params_dir: Path,
+    figures_dir: Path,
+    strategy: str,
+    gate_config: dict,
+    channels: dict,
+) -> tuple[dict, dict]:
+    """Apply gating to a single sample's events."""
+    sample_id = record["sample_id"]
+    events = load_dataframe(indir / record["events_file"])
+    
+    gated_events, params = auto_gate(events, strategy, gate_config)
+    
+    save_dataframe(gated_events, events_dir / f"{sample_id}.parquet")
+    _write_json(params_dir / f"{sample_id}.json", params)
+    
+    # Generate scatter plot
+    fig = plot_gating_scatter(
+        events,
+        gated_events,
+        fsc_channel=channels.get("fsc_a", "FSC-A"),
+        ssc_channel=channels.get("ssc_a", "SSC-A"),
+    )
+    fig.savefig(figures_dir / f"{sample_id}.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    
+    summary_row = {
+        "sample_id": sample_id,
+        "input_events": len(events),
+        "gated_events": len(gated_events),
+        "gated_fraction": len(gated_events) / len(events) if len(events) > 0 else 0,
+    }
+    summary_row.update(params)
+    
+    record = dict(record)
+    record["events_file"] = f"events/{sample_id}.parquet"
+    record["params_file"] = f"params/{sample_id}.json"
+    return record, summary_row
 
 
 def _resolve_marker_columns(values: str | None, cfg: AppConfig) -> Iterable[str]:

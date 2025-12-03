@@ -32,18 +32,20 @@ def qc_summary(sample_tables: Dict[str, pd.DataFrame]) -> pd.DataFrame:
             records.append({"sample_id": sample_id, "total_events": 0, "pass_qc": 0, "pass_qc_pct": 0.0})
             continue
 
-        debris = df["qc_debris"].sum()
-        doublet = df["qc_doublet"].sum()
+        debris = df["qc_debris"].sum() if "qc_debris" in df.columns else 0
+        doublet = df["qc_doublet"].sum() if "qc_doublet" in df.columns else 0
         passed = total - debris - doublet
-        records.append({
+        
+        record = {
             "sample_id": sample_id,
             "total_events": total,
-            "qc_pass_fraction": frame["qc_pass"].mean() if "qc_pass" in frame else np.nan,
-            "debris_fraction": frame.get("qc_debris", pd.Series(False)).mean(),
-            "doublet_fraction": frame.get("qc_doublets", pd.Series(False)).mean(),
-            "saturated_fraction": frame.get("qc_saturated", pd.Series(False)).mean(),
+            "passed_events": passed,
+            "pass_qc_pct": (passed / total) * 100 if total > 0 else 0.0,
+            "debris_fraction": debris / total if total > 0 else 0.0,
+            "doublet_fraction": doublet / total if total > 0 else 0.0,
         }
-        channel_stats = _channel_metrics(frame, exclude_flags=True)
+        
+        channel_stats = _channel_metrics(df, exclude_flags=True)
         record.update(channel_stats)
         records.append(record)
     return pd.DataFrame(records)
