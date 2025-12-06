@@ -11,7 +11,7 @@ import pandas as pd
 
 
 def plot_qc_summary(summary_df: pd.DataFrame, output_path: Optional[str] = None, ax: Optional[plt.Axes] = None) -> Figure:
-    """Bar chart of QC pass fractions per sample."""
+    """Bar chart of QC pass percentage per sample."""
     if summary_df.empty:
         return Figure()
 
@@ -20,10 +20,23 @@ def plot_qc_summary(summary_df: pd.DataFrame, output_path: Optional[str] = None,
     else:
         fig = ax.get_figure()
 
-    ax.bar(summary_df["sample_id"], summary_df["pass_qc_pct"], color="#2E86AB")
-    ax.set_ylabel("QC pass fraction")
-    ax.set_ylim(0, 1)
+    # Check if we have the expected column
+    if "pass_qc_pct" not in summary_df.columns:
+        return fig
+    
+    bars = ax.bar(summary_df["sample_id"], summary_df["pass_qc_pct"], color="#2E86AB")
+    ax.set_ylabel("QC Pass Rate (%)")
+    ax.set_ylim(0, 100)
+    ax.set_xlabel("Sample")
+    
+    # Rotate x-axis labels for readability
+    ax.set_xticks(range(len(summary_df["sample_id"])))
     ax.set_xticklabels(summary_df["sample_id"], rotation=45, ha="right")
+    
+    # Add a horizontal line at 80% as a common threshold
+    ax.axhline(y=80, color='#E74C3C', linestyle='--', linewidth=1, alpha=0.7, label='80% threshold')
+    ax.legend(loc='lower right')
+    
     fig.tight_layout()
 
     if output_path:
