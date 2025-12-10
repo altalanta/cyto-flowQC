@@ -175,7 +175,7 @@ import matplotlib.pyplot as plt
 
 from cytoflow_qc import __version__
 from cytoflow_qc.config import AppConfig, load_and_validate_config
-from cytoflow_qc.exceptions import CytoflowQCError
+from cytoflow_qc.exceptions import CytoflowQCError, ValidationError
 from cytoflow_qc.log_config import setup_logging
 from cytoflow_qc.pipeline import (
     CompensationStage, 
@@ -251,7 +251,13 @@ def validate(
 ):
     """Validate input files and configuration without running the full pipeline."""
     setup_logging(Path.cwd())
-    if not validate_inputs(samplesheet, config):
+    try:
+        validate_inputs(samplesheet, config)
+    except ValidationError as e:
+        logger.error(f"Validation failed: {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        logger.error(f"Unexpected validation error: {e}", exc_info=True)
         raise typer.Exit(1)
 
 
@@ -776,34 +782,34 @@ def run(
 ) -> None:
     setup_logging(out)
     
-    # Perform validation
-    if not validate_inputs(samplesheet, config):
+    # Perform validation and obtain the validated config
+    try:
+        cfg = validate_inputs(samplesheet, config)
+    except ValidationError as e:
+        logger.error(f"Validation failed: {e}")
         raise typer.Exit(1)
-        
+    except Exception as e:
+        logger.error(f"Unexpected validation error: {e}", exc_info=True)
+        raise typer.Exit(1)
+
     if dry_run:
         logger.info("Dry run successful. Exiting without running the pipeline.")
         return
 
     try:
-        cfg = load_and_validate_config(config)
-    except (ValueError, FileNotFoundError) as e:
-        logger.error(f"Error loading configuration: {e}", exc_info=True)
-        raise typer.Exit(code=1)
-    
-    try:
-    root = ensure_dir(out)
-        
+        root = ensure_dir(out)
+
         # Generate and save provenance information
         logger.info("Generating provenance report...")
         generate_provenance_report(cfg, samplesheet, root)
-        
+
         # Define directories
-    ingest_dir = root / "ingest"
-    compensate_dir = root / "compensate"
-    qc_dir = root / "qc"
-    gate_dir = root / "gate"
-    drift_dir = root / "drift"
-    stats_dir = root / "stats"
+        ingest_dir = root / "ingest"
+        compensate_dir = root / "compensate"
+        qc_dir = root / "qc"
+        gate_dir = root / "gate"
+        drift_dir = root / "drift"
+        stats_dir = root / "stats"
 
         # Execute pipeline
         ingestion_result = IngestionStage(ingest_dir, samplesheet, cfg).run()
@@ -811,13 +817,13 @@ def run(
         qc_result = QCStage(qc_dir, workers, cfg.qc).run(compensation_result)
         gating_result = GatingStage(gate_dir, workers, "default", cfg).run(qc_result)
         drift_result = DriftStage(drift_dir, batch, cfg).run(gating_result)
-        
+
         markers = cfg.channels.markers
         stats_result = StatsStage(stats_dir, "condition", markers).run(gating_result)
 
         # Build final report
-        ReportStage(root).run(stats_result)
-        
+        ReportStage(root, root / "report.html").run(stats_result)
+
     except CytoflowQCError as e:
         logger.error(f"A pipeline error occurred: {e}", exc_info=True)
         raise typer.Exit(code=1)
