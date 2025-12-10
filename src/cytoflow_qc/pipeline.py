@@ -348,11 +348,13 @@ class ReportStage(PipelineStage):
     """Generates the final interactive HTML report."""
     stage_name = "report"
 
-    def __init__(self, root_dir: Path):
+    def __init__(self, root_dir: Path, output_path: Path | None = None):
         self.root_dir = root_dir
+        # Default to root_dir/report.html if no explicit output is provided
+        self.output_path = output_path or (root_dir / "report.html")
 
     def _run_logic(self, input_result: StageResult | None = None) -> StageResult | None:
-        report_path = self.root_dir / "report.html"
+        report_path = self.output_path
         create_and_save_report(self.root_dir, report_path)
         logger.info(f"Interactive report saved to {report_path}")
         return None  # This is a terminal stage

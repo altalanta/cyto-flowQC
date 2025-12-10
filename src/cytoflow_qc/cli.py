@@ -333,7 +333,7 @@ def report(
     indir: Path = typer.Argument(..., exists=True),
     out: Path = typer.Argument(...),
 ) -> None:
-    ReportStage(indir).run()
+    ReportStage(indir, out).run()
     logger.info(f"Report written to {out}")
 
 
@@ -791,20 +791,20 @@ def run(
         raise typer.Exit(code=1)
     
     try:
-        root = ensure_dir(out)
+    root = ensure_dir(out)
         
         # Generate and save provenance information
         logger.info("Generating provenance report...")
         generate_provenance_report(cfg, samplesheet, root)
         
         # Define directories
-        ingest_dir = root / "ingest"
-        compensate_dir = root / "compensate"
-        qc_dir = root / "qc"
-        gate_dir = root / "gate"
-        drift_dir = root / "drift"
-        stats_dir = root / "stats"
-        
+    ingest_dir = root / "ingest"
+    compensate_dir = root / "compensate"
+    qc_dir = root / "qc"
+    gate_dir = root / "gate"
+    drift_dir = root / "drift"
+    stats_dir = root / "stats"
+
         # Execute pipeline
         ingestion_result = IngestionStage(ingest_dir, samplesheet, cfg).run()
         compensation_result = CompensationStage(compensate_dir, workers, spill).run(ingestion_result)
