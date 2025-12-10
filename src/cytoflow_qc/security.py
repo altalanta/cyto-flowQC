@@ -59,7 +59,10 @@ class DataAnonymizer:
         Args:
             seed: Seed for Faker to ensure reproducible anonymization.
         """
-        self.fake = Faker() if seed is None else Faker(seed)
+        self.fake = Faker()
+        if seed is not None:
+            # Faker requires seeding via seed_instance for determinism
+            self.fake.seed_instance(seed)
         self.mapping: dict[str, dict[str, str]] = {}
 
     def anonymize_dataframe(
