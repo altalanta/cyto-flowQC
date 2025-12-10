@@ -35,12 +35,12 @@ setup-dev:
 lint:
 	poetry run ruff check src tests
 	poetry run mypy src
-	black --check src tests
+	poetry run black --check src tests
 
 .PHONY: format
 format: ## Format code with black and ruff
-	ruff check --fix src tests
-	black src tests
+	poetry run ruff check --fix src tests
+	poetry run black src tests
 
 .PHONY: type-check
 type-check: ## Run mypy type checking
