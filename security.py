@@ -59,7 +59,10 @@ class DataAnonymizer:
         Args:
             seed: Seed for Faker to ensure reproducible anonymization.
         """
-        self.fake = Faker() if seed is None else Faker(seed)
+        self.fake = Faker()
+        if seed is not None:
+            # Faker requires seeding via seed_instance for determinism
+            self.fake.seed_instance(seed)
         self.mapping: dict[str, dict[str, str]] = {}
 
     def anonymize_dataframe(
@@ -84,7 +87,7 @@ class DataAnonymizer:
 
             if identifier_col and identifier_col in df_anonymized.columns:
                 # Use identifier for stable mapping
-                self.mapping[col] = { original: self._anonymize_value(col, original) 
+                self.mapping[col] = { original: self._anonymize_value(col, original)
                                     for original in df_anonymized[col].unique() }
                 df_anonymized[col] = df_anonymized[col].map(self.mapping[col])
             else:
@@ -368,4 +371,9 @@ if __name__ == "__main__":
         illegal_config_update()
     except SecurityError as e:
         print(e)
+
+
+
+
+
 
