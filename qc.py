@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, List
 
 import numpy as np
 import pandas as pd
+from cytoflow_qc.exceptions import QCError
 
 DEFAULT_QC_CONFIG: Dict[str, Dict[str, float]] = {
     "debris": {"fsc_percentile": 2.0, "ssc_percentile": 2.0},
@@ -14,69 +15,63 @@ DEFAULT_QC_CONFIG: Dict[str, Dict[str, float]] = {
 }
 
 
-def add_qc_flags(df: pd.DataFrame, config: Optional[Dict[str, Dict[str, float]]] = None) -> pd.DataFrame:
-    """Annotate the provided events table with QC flag columns.
+def add_qc_flags(df: pd.DataFrame, qc_config: Dict[str, Dict[str, float]]) -> pd.DataFrame:
+    """Add QC flags to the event DataFrame based on configuration."""
 
-    Columns added:
-      * ``qc_debris`` – low FSC/SSC events
-      * ``qc_doublets`` – FSC-H deviating from FSC-A
-      * ``qc_saturated`` – fluorescence at detector max
-      * ``qc_pass`` – inverse OR of the above flags
-    """
-
-    cfg = DEFAULT_QC_CONFIG.copy()
-    if config:
-        cfg = {**cfg, **config}
-
-    result = df.copy()
-    result["qc_debris"] = _flag_debris(result, cfg["debris"])
-    result["qc_doublets"] = _flag_doublets(result, cfg["doublets"])
-    result["qc_saturated"] = _flag_saturation(result, cfg["saturation"])
-    result["qc_pass"] = ~(result[["qc_debris", "qc_doublets", "qc_saturated"]].any(axis=1))
-    return result
+    df["qc_debris"] = _flag_debris(df, **qc_config.get("debris", {}))
+    df["qc_doublet"] = _flag_doublets(df, **qc_config.get("doublets", {}))
+    return df
 
 
-def qc_summary(samples: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """Summarise QC metrics for a dict of ``sample_id -> DataFrame``."""
-
+def qc_summary(sample_tables: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Generate a summary DataFrame of QC metrics for all samples."""
     records = []
-    for sample_id, frame in samples.items():
-        total = len(frame)
+    for sample_id, df in sample_tables.items():
+        total = len(df)
         if total == 0:
+            records.append({"sample_id": sample_id, "total_events": 0, "pass_qc": 0, "pass_qc_pct": 0.0})
             continue
+
+        debris = df["qc_debris"].sum() if "qc_debris" in df.columns else 0
+        doublet = df["qc_doublet"].sum() if "qc_doublet" in df.columns else 0
+        passed = total - debris - doublet
+        
         record = {
             "sample_id": sample_id,
             "total_events": total,
-            "qc_pass_fraction": frame["qc_pass"].mean() if "qc_pass" in frame else np.nan,
-            "debris_fraction": frame.get("qc_debris", pd.Series(False)).mean(),
-            "doublet_fraction": frame.get("qc_doublets", pd.Series(False)).mean(),
-            "saturated_fraction": frame.get("qc_saturated", pd.Series(False)).mean(),
+            "passed_events": passed,
+            "pass_qc_pct": (passed / total) * 100 if total > 0 else 0.0,
+            "debris_fraction": debris / total if total > 0 else 0.0,
+            "doublet_fraction": doublet / total if total > 0 else 0.0,
         }
-        channel_stats = _channel_metrics(frame, exclude_flags=True)
+        
+        channel_stats = _channel_metrics(df, exclude_flags=True)
         record.update(channel_stats)
         records.append(record)
     return pd.DataFrame(records)
 
 
-def _flag_debris(df: pd.DataFrame, config: Dict[str, float]) -> pd.Series:
-    fsc = _find_channel(df, ("FSC-A", "FSC_A", "fsc_a", "fsc-a"))
-    ssc = _find_channel(df, ("SSC-A", "SSC_A", "ssc_a", "ssc-a"))
-    if fsc is None or ssc is None:
-        return pd.Series(False, index=df.index)
-    fsc_cut = np.percentile(df[fsc], config.get("fsc_percentile", 2.0))
-    ssc_cut = np.percentile(df[ssc], config.get("ssc_percentile", 2.0))
-    return (df[fsc] <= fsc_cut) | (df[ssc] <= ssc_cut)
+def _flag_debris(df: pd.DataFrame, method: str = "percentile", **kwargs) -> pd.Series:
+    """Flag debris based on FSC/SSC properties."""
+    if method == "percentile":
+        fsc_a_pct = kwargs.get("fsc_a_pct", 2)
+        ssc_a_pct = kwargs.get("ssc_a_pct", 2)
+        fsc_low = np.percentile(df["FSC-A"], fsc_a_pct)
+        ssc_low = np.percentile(df["SSC-A"], ssc_a_pct)
+        return (df["FSC-A"] < fsc_low) | (df["SSC-A"] < ssc_low)
+    else:
+        raise QCError(f"Unsupported debris removal method: {method}")
 
 
-def _flag_doublets(df: pd.DataFrame, config: Dict[str, float]) -> pd.Series:
+def _flag_doublets(df: pd.DataFrame, **kwargs) -> pd.Series:
+    """Flag doublets based on FSC-A vs FSC-H."""
     fsc_a = _find_channel(df, ("FSC-A", "FSC_A", "fsc_a", "fsc-a"))
     fsc_h = _find_channel(df, ("FSC-H", "FSC_H", "fsc_h", "fsc-h"))
     if fsc_a is None or fsc_h is None:
         return pd.Series(False, index=df.index)
-    expected = df[fsc_a].replace(0, np.nan)
-    ratio = (df[fsc_h] / expected).fillna(1.0)
-    tol = config.get("tolerance", 0.1)
-    return ratio.sub(1.0).abs() > tol
+    expected_fsc_h = df["FSC-A"] * kwargs.get("slope", 1.0) + kwargs.get("intercept", 0.0)
+    deviation = np.abs(df["FSC-H"] - expected_fsc_h) / (expected_fsc_h + 1e-6)
+    return deviation > kwargs.get("tol", 0.02)
 
 
 def _flag_saturation(df: pd.DataFrame, config: Dict[str, float]) -> pd.Series:
