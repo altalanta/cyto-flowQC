@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
@@ -52,9 +53,8 @@ def list_stage_events(stage_dir: Path) -> dict[str, str]:
 
 
 def timestamp() -> str:
-    """UTC timestamp used for logs and reports."""
-
-    return pd.Timestamp.utcnow().isoformat()
+    """UTC timestamp used for logs and reports (timezone-aware)."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:

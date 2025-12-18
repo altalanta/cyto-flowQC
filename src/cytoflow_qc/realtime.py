@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import threading
 import time
 from collections import deque
@@ -12,6 +13,8 @@ from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 # Optional dependencies for real-time processing
 try:
@@ -65,7 +68,7 @@ class WebSocketProcessor:
         async def process_websocket():
             try:
                 async with websockets.connect(self.ws_url) as websocket:
-                    print(f"🔗 Connected to WebSocket: {self.ws_url}")
+                    logger.info(f"Connected to WebSocket: {self.ws_url}")
 
                     while self._running:
                         try:
@@ -89,19 +92,19 @@ class WebSocketProcessor:
                                 try:
                                     handler(df)
                                 except Exception as e:
-                                    print(f"Error in data handler: {e}")
+                                    logger.error(f"Error in data handler: {e}")
 
                         except asyncio.TimeoutError:
                             continue
                         except websockets.exceptions.ConnectionClosed:
-                            print("🔌 WebSocket connection closed")
+                            logger.info("WebSocket connection closed")
                             break
                         except Exception as e:
-                            print(f"Error processing WebSocket data: {e}")
+                            logger.error(f"Error processing WebSocket data: {e}")
                             break
 
             except Exception as e:
-                print(f"WebSocket connection error: {e}")
+                logger.error(f"WebSocket connection error: {e}")
             finally:
                 self._running = False
 
@@ -112,14 +115,14 @@ class WebSocketProcessor:
         )
         self._processing_thread.start()
 
-        print("🚀 Real-time processing started")
+        logger.info("Real-time processing started")
 
     def stop_processing(self) -> None:
         """Stop real-time data processing."""
         self._running = False
         if self._processing_thread:
             self._processing_thread.join(timeout=5.0)
-        print("🛑 Real-time processing stopped")
+        logger.info("Real-time processing stopped")
 
     def get_buffer_data(self) -> pd.DataFrame:
         """Get all data currently in buffer."""
@@ -177,7 +180,7 @@ class StreamingProcessor:
                 handler_results = handler(new_data)
                 results.update(handler_results)
             except Exception as e:
-                print(f"Error in analysis handler: {e}")
+                logger.error(f"Error in analysis handler: {e}")
 
         # Save results if significant
         if results:
@@ -326,7 +329,7 @@ class DataStreamSimulator:
 
                     # Write data
                     for event in data:
-                        line = ",".join(f"{v".3f"}" for v in event.values()) + "\n"
+                        line = ",".join(f"{v:.3f}" for v in event.values()) + "\n"
                         f.write(line)
 
                     # Wait for next batch
@@ -337,14 +340,14 @@ class DataStreamSimulator:
         self._simulation_thread = threading.Thread(target=simulate, daemon=True)
         self._simulation_thread.start()
 
-        print(f"🎭 Started data simulation: {self.events_per_second} events/sec for {duration_seconds}s")
+        logger.info(f"Started data simulation: {self.events_per_second} events/sec for {duration_seconds}s")
 
     def stop_simulation(self) -> None:
         """Stop data simulation."""
         self._running = False
         if hasattr(self, '_simulation_thread'):
             self._simulation_thread.join(timeout=5.0)
-        print("🛑 Data simulation stopped")
+        logger.info("Data simulation stopped")
 
 
 class LiveQualityMonitor:
@@ -453,7 +456,7 @@ def create_realtime_pipeline(
                     "data_quality": "good" if not alerts else "warning"
                 }
         except Exception as e:
-            print(f"Error in QC handler: {e}")
+            logger.error(f"Error in QC handler: {e}")
 
         return {"qc_metrics": {}, "alerts": []}
 
@@ -476,7 +479,7 @@ def create_realtime_pipeline(
                 return {"cv_metrics": cv_metrics}
 
         except Exception as e:
-            print(f"Error in quality monitor handler: {e}")
+            logger.error(f"Error in quality monitor handler: {e}")
 
         return {"cv_metrics": {}}
 
@@ -526,7 +529,7 @@ def start_realtime_monitoring(
             return {"monitoring": monitor_data}
 
         except Exception as e:
-            print(f"Error in monitoring update: {e}")
+            logger.error(f"Error in monitoring update: {e}")
 
         return {}
 
@@ -535,16 +538,16 @@ def start_realtime_monitoring(
     # Start processing
     ws_processor.start_processing()
 
-    print("🚀 Real-time monitoring started")
-    print(f"📊 Monitoring dashboard available at: http://localhost:{monitoring_port}")
-    print(f"📁 Output directory: {output_dir}")
+    logger.info("Real-time monitoring started")
+    logger.info(f"Monitoring dashboard available at: http://localhost:{monitoring_port}")
+    logger.info(f"Output directory: {output_dir}")
 
     # Keep running
     try:
         while ws_processor._running:
             time.sleep(1.0)
     except KeyboardInterrupt:
-        print("\n🛑 Stopping real-time monitoring...")
+        logger.info("Stopping real-time monitoring...")
         ws_processor.stop_processing()
 
 
@@ -577,14 +580,14 @@ def create_monitoring_dashboard(monitor: RealTimeMonitor, port: int = 8081) -> N
     """
     # This would create a Streamlit dashboard for monitoring
     # For now, it's a placeholder
-    print(f"📊 Monitoring dashboard would be available at: http://localhost:{port}")
+    logger.info(f"Monitoring dashboard would be available at: http://localhost:{port}")
 
 
 # Example usage functions
 def demo_realtime_processing() -> None:
     """Demonstrate real-time processing capabilities."""
-    print("🔬 CytoFlow-QC Real-Time Processing Demo")
-    print("=" * 50)
+    logger.info("CytoFlow-QC Real-Time Processing Demo")
+    logger.info("=" * 50)
 
     # Simulate data source
     simulator = simulate_instrument_data("/tmp/simulated_data.csv", duration_minutes=1)
@@ -597,8 +600,8 @@ def demo_realtime_processing() -> None:
     # Start processing
     ws_processor.start_processing()
 
-    print("🚀 Real-time processing demo started")
-    print("📊 Processing simulated flow cytometry data...")
+    logger.info("Real-time processing demo started")
+    logger.info("Processing simulated flow cytometry data...")
 
     # Let it run for a bit
     import time
@@ -608,8 +611,8 @@ def demo_realtime_processing() -> None:
     ws_processor.stop_processing()
     simulator.stop_simulation()
 
-    print("✅ Demo completed")
-    print(f"📁 Check output in: /tmp/realtime_output")
+    logger.info("Demo completed")
+    logger.info(f"Check output in: /tmp/realtime_output")
 
 
 if __name__ == "__main__":

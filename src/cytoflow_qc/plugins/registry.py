@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import importlib.metadata
+import logging
 from typing import Any, Dict, List, Type
 
 from .base import PluginBase, PluginLoadError
+
+logger = logging.getLogger(__name__)
 
 ENTRY_POINT_GROUPS = {
     "gating": "cytoflow_qc.gating_strategies",
@@ -34,7 +37,7 @@ class PluginRegistry:
                     if issubclass(plugin_class, PluginBase):
                         self._plugins[plugin_type][entry_point.name] = plugin_class
                 except Exception as e:
-                    print(f"Warning: Could not load plugin '{entry_point.name}': {e}")
+                    logger.warning(f"Could not load plugin '{entry_point.name}': {e}")
 
     def get_available_plugins(self, plugin_type: str | None = None) -> Dict[str, List[str]]:
         """Get list of available plugins."""
