@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Callable
@@ -8,6 +9,8 @@ from typing import Any, Callable
 import pandas as pd
 from cryptography.fernet import Fernet
 from faker import Faker
+
+logger = logging.getLogger(__name__)
 
 
 # --- Constants ---
@@ -43,9 +46,9 @@ def _generate_key_if_not_exists(key_path: Path | None = None) -> bytes:
         key = Fernet.generate_key()
         if key_path:
             key_path.write_bytes(key)
-            print(f"New encryption key generated and saved to {key_path}")
+            logger.info(f"New encryption key generated and saved to {key_path}")
         else:
-            print(f"No encryption key found. Generated a new one. Store this in {ENCRYPTION_KEY_ENV_VAR}: {key.decode()}")
+            logger.info(f"No encryption key found. Generated a new one. Store this in {ENCRYPTION_KEY_ENV_VAR}: {key.decode()}")
         return key
 
 
@@ -82,7 +85,7 @@ class DataAnonymizer:
 
         for col in columns_to_anonymize:
             if col not in df_anonymized.columns:
-                print(f"Warning: Column '{col}' not found for anonymization.")
+                logger.warning(f"Column '{col}' not found for anonymization.")
                 continue
 
             if identifier_col and identifier_col in df_anonymized.columns:
@@ -183,7 +186,7 @@ class DataEncryptor:
 
         with open(output_path, 'wb') as f_out:
             f_out.write(encrypted_data)
-        print(f"File encrypted from {input_file} to {output_file}")
+        logger.info(f"File encrypted from {input_file} to {output_file}")
 
     def decrypt_file(self, input_file: str | Path, output_file: str | Path) -> None:
         """Decrypt a file.
@@ -205,7 +208,7 @@ class DataEncryptor:
 
         with open(output_path, 'wb') as f_out:
             f_out.write(decrypted_data)
-        print(f"File decrypted from {input_file} to {output_file}")
+        logger.info(f"File decrypted from {input_file} to {output_file}")
 
 
 # --- Role-Based Access Control (RBAC) ---
@@ -229,7 +232,7 @@ class RBACManager:
             with open(policy_file, 'r') as f:
                 return json.load(f)
         else:
-            print("Warning: RBAC policy file not found. Using default policies.")
+            logger.warning("RBAC policy file not found. Using default policies.")
             return self._get_default_policies()
 
     def _get_default_policies(self) -> dict[str, Any]:
@@ -262,7 +265,7 @@ class RBACManager:
         """
         resource_policy = self.policies["resources"].get(resource)
         if not resource_policy:
-            print(f"Warning: Resource '{resource}' not defined in policies.")
+            logger.warning(f"Resource '{resource}' not defined in policies.")
             return False
 
         allowed_roles = resource_policy.get("protected_by", [])
@@ -300,7 +303,7 @@ if __name__ == "__main__":
     # Example Usage
 
     # Anonymization
-    print("--- Data Anonymization Example ---")
+    logger.info("--- Data Anonymization Example ---")
     data = {
         "patient_id": ["P001", "P002", "P003"],
         "patient_name": ["Alice Smith", "Bob Johnson", "Charlie Brown"],
@@ -309,7 +312,7 @@ if __name__ == "__main__":
         "FSC-A": [1000, 1500, 1200],
     }
     df = pd.DataFrame(data)
-    print("Original DataFrame:")
+    logger.info("Original DataFrame:")
     print(df)
 
     anonymizer = DataAnonymizer(seed=42) # Seed for reproducibility

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -7,6 +8,8 @@ from typing import Any, Dict, Generator, Tuple
 
 import pandas as pd
 import io
+
+logger = logging.getLogger(__name__)
 
 # Optional dependencies for cloud connectors
 try:
@@ -267,7 +270,7 @@ def get_connector(uri: str, config: Dict[str, Any] | None = None) -> DataSourceC
 
 if __name__ == "__main__":
     # Example Usage
-    print("--- Local File Connector Example ---")
+    logger.info("--- Local File Connector Example ---")
     local_connector = get_connector("file:///tmp/my_data")
     test_dir = Path("/tmp/my_data/sub_dir")
     test_dir.mkdir(parents=True, exist_ok=True)
@@ -275,18 +278,18 @@ if __name__ == "__main__":
     (test_dir / "file2.parquet").touch()
     (test_dir / "another.txt").write_text("hello")
 
-    print("Local files:")
+    logger.info("Local files:")
     for f in local_connector.list_files("/tmp/my_data", pattern="*.csv"):
-        print(f"  {f}")
+        logger.info(f"  {f}")
         content = local_connector.read_file(f)
-        print(f"  Content: {content.decode()}")
+        logger.info(f"  Content: {content.decode()}")
         df = local_connector.read_dataframe(f)
-        print(f"  DataFrame:\n{df}")
+        logger.info(f"  DataFrame:\n{df}")
 
     output_path = test_dir / "output.csv"
     local_connector.write_dataframe(str(output_path), pd.DataFrame({"a": [1, 2], "b": [3, 4]}))
-    print(f"DataFrame written to: {output_path}")
-    print(f"Content read back: {local_connector.read_file(str(output_path)).decode()}")
+    logger.info(f"DataFrame written to: {output_path}")
+    logger.info(f"Content read back: {local_connector.read_file(str(output_path)).decode()}")
 
     # Clean up
     import shutil

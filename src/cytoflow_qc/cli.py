@@ -107,15 +107,15 @@ Commands:
 
 - `cloud`: Manages cloud deployment and scaling for `cytoflow-qc` workloads.
   Arguments:
-    - `provider` (str): Cloud provider ("kubernetes", "serverless").
-    - `action` (str): Cloud action ("deploy", "scale", "status").
-    - `--config`, `-c` (str, optional): Path to cloud configuration file.
+    - `provider` (str): Cloud provider (kubernetes, serverless).
+    - `action` (str): Cloud action (deploy, scale, status).
+    - `--config`, `-c` (Path, optional): Path to cloud configuration file.
 
 - `realtime`: Manages real-time data processing and monitoring.
   Arguments:
-    - `action` (str): Real-time action ("start", "monitor").
+    - `action` (str): Real-time action (start, monitor).
     - `--ws-url` (str, optional): WebSocket URL for data source.
-    - `--config`, `-c` (str, optional): Path to real-time configuration.
+    - `--config`, `-c` (Path, optional): Path to real-time configuration.
 
 - `anonymize`: Anonymizes sensitive data in specified columns of dataframes.
   Arguments:
@@ -134,7 +134,7 @@ Commands:
   Arguments:
     - `infile` (Path): Input encrypted file.
     - `outfile` (Path): Output file for decrypted data.
-    - `--key-path`, `-k` (Path, optional): Path to encryption key file.
+    - `--key-path`, `-k` (Path, optional): Path to decryption key file.
 
 - `rbac`: Checks role-based access control permissions.
   Arguments:
@@ -145,10 +145,10 @@ Commands:
 
 - `data-source`: Manages data source connectors and ingests data.
   Arguments:
-    - `action` (str): Action to perform ("configure", "list", "ingest").
-    - `--uri`, `-u` (str, optional): Base URI for the data source (default: "file:///").
+    - `action` (str): Action to perform (configure, list, ingest).
+    - `--uri`, `-u` (str, optional): Base URI for the data source (default: file:///).
     - `--config`, `-c` (Path, optional): Path to data source configuration YAML file.
-    - `--pattern`, `-p` (str, optional): Glob pattern for listing/ingesting files (default: "*.fcs").
+    - `--pattern`, `-p` (str, optional): Glob pattern for listing/ingesting files (default: *.fcs).
     - `--output-dir`, `-o` (Path, optional): Output directory for ingested files.
 
 - `run`: Executes the full `cytoflow-qc` pipeline from ingestion to report generation.
@@ -267,7 +267,7 @@ def ingest(
     out: Path = typer.Argument(...),
     config: dict[str, object] | None = typer.Option(None, "--config", "-c", help="Optional YAML config"),
 ) -> None:
-    cfg = load_and_validate_config(config) if config else {}
+    cfg = load_and_validate_config(config) if config else AppConfig()
     stage_ingest(samplesheet, out, cfg)
     logger.info(f"Ingested samples -> {out}")
 
@@ -502,11 +502,15 @@ def plugins(
     config: str | None = typer.Option(None, "--config", "-c", help="Plugin configuration"),
 ) -> None:
     """Manage and interact with cytoflow-qc plugins."""
-    if action == "create":
-        create_plugin_scaffold()
-        return
+    try:
+        if action == "create":
+            create_plugin_scaffold()
+            return
 
-    registry = get_plugin_registry()
+        registry = get_plugin_registry()
+    except Exception as e:
+        logger.error(f"Failed to initialize plugin system: {e}")
+        raise typer.Exit(1)
 
     if action == "list":
         # List available plugins
@@ -601,22 +605,61 @@ def realtime(
     config: str | None = typer.Option(None, "--config", "-c", help="Real-time configuration"),
 ) -> None:
     """Manage real-time processing."""
-    if action == "start":
-        if not ws_url:
-            logger.error("Error: --ws-url required for start action")
+    try:
+        if action == "start":
+            if not ws_url:
+                logger.error("Error: --ws-url required for start action")
+                raise typer.Exit(1)
+
+            # Validate WebSocket URL format
+            if not ws_url.startswith(('ws://', 'wss://')):
+                logger.error("Error: --ws-url must start with 'ws://' or 'wss://'")
+                raise typer.Exit(1)
+
+            logger.info(f"Starting real-time processing from: {ws_url}")
+
+            # Check if required dependencies are available
+            try:
+                import websockets
+                import aiofiles
+                logger.info("WebSocket and async file I/O dependencies available")
+            except ImportError as e:
+                logger.warning(f"Missing dependency for real-time processing: {e}")
+                logger.warning("Install required packages: pip install websockets aiofiles")
+
+            # This would start the real-time processing
+            logger.warning("Real-time processing is currently a placeholder implementation")
+            logger.warning("To enable full real-time processing, ensure WebSocket server is running at the specified URL")
+            logger.info("Real-time processing started (placeholder - connection simulation only)")
+
+        elif action == "monitor":
+            # Start monitoring dashboard
+            try:
+                monitor = RealTimeMonitor()
+                logger.info("Starting real-time monitoring dashboard...")
+                # Check if required dependencies are available
+                try:
+                    import streamlit
+                    logger.info("Streamlit available for monitoring dashboard")
+                except ImportError:
+                    logger.warning("Streamlit not available - monitoring dashboard features limited")
+
+                # This would start the monitoring dashboard
+                logger.warning("Real-time monitoring is currently a placeholder implementation")
+                logger.warning("To enable full monitoring, install required dependencies: pip install websockets aiofiles")
+                logger.info("Monitoring dashboard started (placeholder - basic functionality only)")
+            except Exception as e:
+                logger.error(f"Failed to initialize real-time monitor: {e}")
+                logger.error("Make sure websockets and aiofiles are installed for real-time functionality")
+                raise typer.Exit(1)
+
+        else:
+            logger.error(f"Unknown real-time action: {action}. Available actions: start, monitor")
             raise typer.Exit(1)
 
-        logger.info(f"Starting real-time processing from: {ws_url}")
-        # This would start the real-time processing
-        logger.info("Real-time processing started (placeholder)")
-    elif action == "monitor":
-        # Start monitoring dashboard
-        monitor = RealTimeMonitor()
-        logger.info("Starting real-time monitoring dashboard...")
-        # This would start the monitoring dashboard
-        logger.info("Monitoring dashboard started (placeholder)")
-    else:
-        logger.error(f"Unknown real-time action: {action}")
+    except Exception as e:
+        logger.error(f"Real-time command failed: {e}")
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -990,6 +1033,8 @@ def stage_stats(indir: Path, out_dir: Path, group_col: str, value_cols: Iterable
     manifest = read_manifest(indir / "manifest.csv")
     records = []
     columns: list[str] | None = None
+    if value_cols is None:
+        value_cols = []
     for record in manifest.to_dict(orient="records"):
         df = load_dataframe(indir / record["events_file"])
         if columns is None:
